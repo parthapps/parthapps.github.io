@@ -1,0 +1,2118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Library Map — Self Study Library &amp; Seat Management</title>
+  <meta name="description" content="Study Library seat map, student admissions, fees passbook, and WhatsApp reminders.">
+  <!-- Compiled Tailwind CSS (same classes as before, no CDN needed) -->
+  <link rel="stylesheet" href="css/app.css">
+  <!-- Google Fonts (cached by the service worker after the first online visit) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    input, textarea { user-select: text; -webkit-user-select: text; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @media print {
+      body > *:not(#printable-passbook) { display: none !important; }
+      #printable-passbook, #printable-passbook.hidden { display: block !important; }
+    }
+  </style>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#047857">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+</head>
+<body class="bg-slate-100 text-slate-900 antialiased min-h-screen">
+
+  <!-- Main Mobile App Shell -->
+  <div class="max-w-md mx-auto bg-slate-50 min-h-screen shadow-2xl flex flex-col relative pb-20">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-11/12 max-w-sm hidden transition-all">
+      <div class="bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-700">
+        <span class="text-emerald-400 font-bold text-base">✓</span>
+        <p id="toast-text" class="text-xs font-bold leading-tight"></p>
+      </div>
+    </div>
+
+    <!-- App Header (Dynamic Owner Name, Branch Selector) -->
+    <header class="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-md px-4 pt-3 pb-2.5 border-b border-slate-200">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider" id="header-greeting">Welcome</span>
+          <h1 class="text-xl font-black text-slate-900 leading-tight" id="header-owner-name">Library Owner</h1>
+          <p class="text-[11px] font-semibold text-emerald-700" id="header-library-name">Study Library</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <!-- Branch Switcher -->
+          <select id="branch-select" onchange="switchBranch(this.value)" class="text-xs font-bold text-slate-800 bg-white px-3 py-1.5 rounded-xl border border-slate-300 shadow-xs focus:outline-none">
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Dynamic Views Container -->
+    <main id="app-content" class="flex-1 px-4 pt-3 space-y-4">
+      <!-- Views injected: Home (with Analytics), Students, Seats (Interactive Room Canvas), Payments (Passbook), Settings -->
+    </main>
+
+    <!-- Bottom Navigation Bar (5 Tabs) -->
+    <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1 shadow-lg">
+      <div class="max-w-md mx-auto grid grid-cols-5 items-center text-center">
+        <!-- Home -->
+        <button onclick="navigateTab('home')" id="nav-home" class="nav-btn py-1.5 flex flex-col items-center text-emerald-700 font-bold">
+          <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          <span class="text-[10px]">Home</span>
+        </button>
+
+        <!-- Students -->
+        <button onclick="navigateTab('students')" id="nav-students" class="nav-btn py-1.5 flex flex-col items-center text-slate-500 font-medium">
+          <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          <span class="text-[10px]">Students</span>
+        </button>
+
+        <!-- Seats Map -->
+        <button onclick="navigateTab('seats')" id="nav-seats" class="nav-btn py-1.5 flex flex-col items-center text-slate-500 font-medium">
+          <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+          <span class="text-[10px]">Seat Map</span>
+        </button>
+
+        <!-- Payments (Passbook) -->
+        <button onclick="navigateTab('payments')" id="nav-payments" class="nav-btn py-1.5 flex flex-col items-center text-slate-500 font-medium">
+          <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+          <span class="text-[10px]">Passbook</span>
+        </button>
+
+        <!-- Settings -->
+        <button onclick="navigateTab('settings')" id="nav-settings" class="nav-btn py-1.5 flex flex-col items-center text-slate-500 font-medium">
+          <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span class="text-[10px]">Settings</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Modals Container -->
+    <div id="modal-container"></div>
+  </div>
+
+  <!-- Hidden Print Container (passbook / receipt) -->
+  <div id="printable-passbook" class="hidden p-6 bg-white"></div>
+
+  <!-- Complete Javascript Application Engine -->
+  <script>
+    const STORAGE_KEY = 'library_map_data_v2';
+    // Broadcast notice file. Only the admin (you) edits notice.json on GitHub; owners cannot edit it.
+    const NOTICE_URL = 'notice.json';
+    const NOTICE_SEEN_KEY = 'library_map_notice_seen';
+
+    let currentTab = 'home';
+    let seatShiftFilter = 'all';
+    let isMapEditMode = false; // Map Edit vs Locked Map
+    let activeDragSeat = null;
+    let dragStartPos = null;
+    let didMoveDrag = false;
+    let paymentSortOrder = 'latest';
+    let currentNoticeId = '';
+    let lastReceipt = null;
+    let lastCollect = { id: null, t: 0 };
+    let storageWarned = false;
+    let exitArmed = false;
+
+    // ==========================================
+    // Small helpers
+    // ==========================================
+    // Escape any user-entered text before it goes into HTML (prevents code injection)
+    function esc(v) {
+      return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // Keep ids safe to use inside onclick="...('id')" handlers
+    function cleanId(v, fallback) {
+      const s = String(v == null ? '' : v).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60);
+      return s || fallback;
+    }
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+    function isDateStr(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
+    function money(n) { return Number(n || 0).toLocaleString('en-IN'); }
+
+    function getTodayString() {
+      const d = new Date();
+      return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    }
+
+    // +1 month. Never overflows into the next month (31 Jan -> 28 Feb) and keeps the original day (anchorDay) for later months.
+    function addOneMonth(dateStr, anchorDay) {
+      if (!isDateStr(dateStr)) dateStr = getTodayString();
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const day = anchorDay > 0 ? anchorDay : d;
+      const lastDay = new Date(y, m + 1, 0).getDate(); // last day of the NEXT month (m is 1-based)
+      const dt = new Date(y, m, Math.min(day, lastDay));
+      return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+    }
+
+    function getDaysRemaining(dueDateStr) {
+      if (!isDateStr(dueDateStr)) return 0;
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const [y, m, d] = dueDateStr.split('-').map(Number);
+      const due = new Date(y, m - 1, d); due.setHours(0, 0, 0, 0);
+      return Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    function getStudentStatus(student) {
+      const days = getDaysRemaining(student.nextDueDate);
+      if (days < 0) return 'overdue';
+      if (days <= 3) return 'due_soon';
+      return 'paid';
+    }
+
+    // 10-digit Indian mobile number or null (accepts +91, 91, 0 prefixes and spaces)
+    function normalizePhone(p) {
+      let d = String(p || '').replace(/\D/g, '');
+      if (d.length === 12 && d.startsWith('91')) d = d.slice(2);
+      else if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+      return d.length === 10 ? d : null;
+    }
+
+    // Number format for wa.me links
+    function waPhone(p) {
+      const n = normalizePhone(p);
+      if (n) return '91' + n;
+      return String(p || '').replace(/\D/g, '');
+    }
+
+    function waLink(phone, msg) {
+      const ph = waPhone(phone);
+      return `https://wa.me/${ph}?text=${encodeURIComponent(msg)}`;
+    }
+
+    const DEFAULT_SHIFTS = [
+      { id: 'full_day', name: 'Full Day (24 Hr)', startTime: '06:00 AM', endTime: '06:00 AM', defaultFee: 1200 },
+      { id: 'morning', name: 'Morning Shift', startTime: '06:00 AM', endTime: '02:00 PM', defaultFee: 800 },
+      { id: 'afternoon', name: 'Afternoon Shift', startTime: '02:00 PM', endTime: '06:00 PM', defaultFee: 600 },
+      { id: 'evening', name: 'Evening Shift', startTime: '06:00 PM', endTime: '11:00 PM', defaultFee: 750 },
+      { id: 'night', name: 'Night Shift', startTime: '11:00 PM', endTime: '06:00 AM', defaultFee: 900 }
+    ];
+
+    function shiftKnown(shiftId) {
+      return (state.shifts || []).some(s => s.id === shiftId);
+    }
+
+    function getShiftDisplayText(shiftId) {
+      const found = (state.shifts || []).find(s => s.id === shiftId);
+      if (!found) return '(Deleted shift)';
+      return `${found.name} (${found.startTime} - ${found.endTime})`;
+    }
+
+    function getShiftShortText(shiftId) {
+      const found = (state.shifts || []).find(s => s.id === shiftId);
+      if (!found) return '(Deleted shift)';
+      return found.name;
+    }
+
+    // ==========================================
+    // Seats data
+    // ==========================================
+    function generateSeats(branchId, total) {
+      const list = [];
+      const rows = Math.ceil(total / 6);
+      const step = rows > 1 ? Math.min(19, 70 / (rows - 1)) : 0;
+      for (let i = 1; i <= total; i++) {
+        const r = Math.floor((i - 1) / 6), c = (i - 1) % 6;
+        list.push({
+          id: `seat_${branchId}_${i}`,
+          branchId,
+          seatNumber: i,
+          label: `S-${i < 10 ? '0' + i : i}`,
+          x: Math.round(12 + c * 15.5),
+          y: Math.round(18 + r * step),
+          isAisle: false
+        });
+      }
+      return list;
+    }
+
+    // Seats of a branch. Auto-generated only once per branch (so "Clear All" really stays cleared).
+    function getBranchSeats(branchId) {
+      if (!state.seats) state.seats = [];
+      const branch = state.branches.find(b => b.id === branchId) || state.branches[0];
+      let list = state.seats.filter(s => s.branchId === branchId);
+      if (!list.length && !branch.seatsInit) {
+        list = generateSeats(branchId, branch.totalSeats || 24);
+        state.seats = [...state.seats, ...list];
+        branch.seatsInit = true;
+        saveData();
+      } else if (!branch.seatsInit) {
+        branch.seatsInit = true;
+      }
+      list.forEach((s, i) => {
+        if (typeof s.x !== 'number' || typeof s.y !== 'number') {
+          s.x = Math.round(12 + (i % 6) * 15.5);
+          s.y = Math.min(88, Math.round(18 + Math.floor(i / 6) * 19));
+        }
+      });
+      return list;
+    }
+
+    // Real label written on the desk (e.g. A12) for a seat number
+    function lab(branchId, n) {
+      const s = (state.seats || []).find(x => x.branchId === branchId && x.seatNumber === n);
+      return (s && s.label) || 'S-' + n;
+    }
+
+    function uniqueLabel(list, base) {
+      let label = base, k = 2;
+      const taken = () => list.some(s => (s.label || '').toLowerCase() === label.toLowerCase());
+      while (taken()) { label = `${base}-${k++}`; }
+      return label;
+    }
+
+    function activeStudents(branchId) {
+      return state.students.filter(s => s.branchId === branchId && s.status === 'active');
+    }
+
+    function occupiedCount(branchId, seats) {
+      const set = new Set(activeStudents(branchId).map(s => s.seatNumber));
+      return seats.filter(x => set.has(x.seatNumber)).length;
+    }
+
+    // Students sitting on a seat (respects the shift filter on the Seat Map)
+    function studentsOnSeat(branchId, seatNumber) {
+      return state.students.filter(s =>
+        s.branchId === branchId && s.status === 'active' && s.seatNumber === seatNumber &&
+        (seatShiftFilter === 'all' || s.shift === seatShiftFilter || s.shift === 'full_day'));
+    }
+
+    // ==========================================
+    // Data: initial state, clean-up and storage
+    // ==========================================
+    function getInitialData() {
+      const branchId = 'branch_1';
+      return {
+        profile: {
+          name: 'Library Owner',
+          phone: '',
+          email: '',
+          libraryName: 'Self Study Library',
+          address: '',
+          upiId: ''
+        },
+        branches: [
+          { id: branchId, name: 'Main Branch', totalSeats: 24, gridCols: 6, seatsInit: true }
+        ],
+        activeBranchId: branchId,
+        shifts: DEFAULT_SHIFTS.map(s => ({ ...s })),
+        seats: generateSeats(branchId, 24),
+        students: [],
+        payments: []
+      };
+    }
+
+    // Makes any data (old versions, restored backups) safe and complete
+    function normalizeState(d) {
+      if (!d || typeof d !== 'object') d = getInitialData();
+      const today = getTodayString();
+      const rnd = () => Math.random().toString(36).slice(2, 7);
+
+      const p = d.profile && typeof d.profile === 'object' ? d.profile : {};
+      const profile = {
+        name: String(p.name || 'Library Owner').slice(0, 80),
+        phone: String(p.phone || '').slice(0, 20),
+        email: String(p.email || '').slice(0, 80),
+        libraryName: String(p.libraryName || 'Self Study Library').slice(0, 80),
+        address: String(p.address || '').slice(0, 160),
+        upiId: String(p.upiId || '').slice(0, 60)
+      };
+
+      const branchIds = new Set();
+      let branches = (Array.isArray(d.branches) ? d.branches : [])
+        .filter(b => b && typeof b === 'object')
+        .map((b, i) => {
+          let id = cleanId(b.id, 'branch_' + (i + 1));
+          while (branchIds.has(id)) id = id + '_' + rnd();
+          branchIds.add(id);
+          return {
+            id,
+            name: String(b.name || 'Branch ' + (i + 1)).slice(0, 60),
+            totalSeats: Math.max(0, parseInt(b.totalSeats, 10) || 0),
+            gridCols: 6,
+            seatsInit: !!b.seatsInit
+          };
+        });
+      if (!branches.length) {
+        branches = [{ id: 'branch_1', name: 'Main Branch', totalSeats: 24, gridCols: 6, seatsInit: false }];
+        branchIds.add('branch_1');
+      }
+
+      const shiftIds = new Set();
+      let shifts = (Array.isArray(d.shifts) && d.shifts.length ? d.shifts : DEFAULT_SHIFTS)
+        .filter(s => s && typeof s === 'object')
+        .map((s, i) => {
+          let id = cleanId(s.id, 'shift_' + i);
+          while (shiftIds.has(id)) id = id + '_' + rnd();
+          shiftIds.add(id);
+          const fee = Number(s.defaultFee);
+          return {
+            id,
+            name: String(s.name || 'Shift').slice(0, 40),
+            startTime: String(s.startTime || '').slice(0, 12),
+            endTime: String(s.endTime || '').slice(0, 12),
+            defaultFee: isFinite(fee) && fee >= 0 ? Math.round(fee) : 800
+          };
+        });
+      if (!shifts.length) shifts = DEFAULT_SHIFTS.map(s => ({ ...s }));
+
+      const seatKeys = new Set();
+      const seats = (Array.isArray(d.seats) ? d.seats : [])
+        .filter(s => s && typeof s === 'object')
+        .map(s => {
+          const bid = cleanId(s.branchId, '');
+          const n = parseInt(s.seatNumber, 10);
+          const out = {
+            id: cleanId(s.id, `seat_${bid}_${n}`),
+            branchId: bid,
+            seatNumber: n,
+            label: String(s.label || 'S-' + n).slice(0, 20),
+            isAisle: false
+          };
+          if (isFinite(Number(s.x)) && isFinite(Number(s.y)) && s.x !== null && s.y !== null) {
+            out.x = Number(s.x); out.y = Number(s.y);
+          }
+          return out;
+        })
+        .filter(s => branchIds.has(s.branchId) && isFinite(s.seatNumber))
+        .filter(s => {
+          const k = s.branchId + '#' + s.seatNumber;
+          if (seatKeys.has(k)) return false;
+          seatKeys.add(k);
+          return true;
+        });
+
+      const studentIds = new Set();
+      const students = (Array.isArray(d.students) ? d.students : [])
+        .filter(s => s && typeof s === 'object')
+        .map((s, i) => {
+          let id = cleanId(s.id, 's_' + i + '_' + rnd());
+          while (studentIds.has(id)) id = id + '_' + rnd();
+          studentIds.add(id);
+          const bid = cleanId(s.branchId, '');
+          const due = isDateStr(s.nextDueDate) ? s.nextDueDate : today;
+          const anchor = parseInt(s.anchorDay, 10);
+          const fee = Number(s.monthlyFee);
+          const out = {
+            id,
+            branchId: branchIds.has(bid) ? bid : branches[0].id,
+            seatNumber: parseInt(s.seatNumber, 10),
+            name: String(s.name || 'Student').slice(0, 80),
+            phone: String(s.phone || '').replace(/\D/g, '').slice(0, 15),
+            shift: cleanId(s.shift, 'full_day'),
+            monthlyFee: isFinite(fee) && fee >= 0 ? Math.round(fee) : 0,
+            admissionDate: isDateStr(s.admissionDate) ? s.admissionDate : today,
+            nextDueDate: due,
+            anchorDay: anchor >= 1 && anchor <= 31 ? anchor : parseInt(due.slice(8, 10), 10),
+            status: s.status === 'inactive' ? 'inactive' : 'active'
+          };
+          if (isDateStr(s.lastPaymentDate)) out.lastPaymentDate = s.lastPaymentDate;
+          if (isDateStr(s.vacatedDate)) out.vacatedDate = s.vacatedDate;
+          return out;
+        })
+        .filter(s => isFinite(s.seatNumber));
+
+      const payIds = new Set();
+      const payments = (Array.isArray(d.payments) ? d.payments : [])
+        .filter(p => p && typeof p === 'object')
+        .map((p, i) => {
+          let id = cleanId(p.id, 'pay_' + i + '_' + rnd());
+          while (payIds.has(id)) id = id + '_' + rnd();
+          payIds.add(id);
+          const bid = cleanId(p.branchId, '');
+          const amt = Number(p.amount);
+          return {
+            id,
+            invoiceNumber: String(p.invoiceNumber || ('INV-' + (i + 1))).slice(0, 30),
+            branchId: branchIds.has(bid) ? bid : branches[0].id,
+            studentId: cleanId(p.studentId, ''),
+            studentName: String(p.studentName || 'Student').slice(0, 80),
+            seatNumber: parseInt(p.seatNumber, 10) || 0,
+            shift: cleanId(p.shift, 'full_day'),
+            amount: isFinite(amt) ? Math.round(amt) : 0,
+            paymentDate: isDateStr(p.paymentDate) ? p.paymentDate : today,
+            paymentMode: String(p.paymentMode || 'cash').slice(0, 12)
+          };
+        });
+
+      const activeId = cleanId(d.activeBranchId, '');
+      return {
+        profile,
+        branches,
+        activeBranchId: branchIds.has(activeId) ? activeId : branches[0].id,
+        shifts,
+        seats,
+        students,
+        payments
+      };
+    }
+
+    function loadData() {
+      let raw = null;
+      try { raw = localStorage.getItem(STORAGE_KEY); } catch (e) { /* storage blocked */ }
+      if (!raw) return normalizeState(getInitialData());
+      try {
+        return normalizeState(JSON.parse(raw));
+      } catch (e) {
+        // Damaged data: keep a copy instead of silently overwriting it
+        try { localStorage.setItem(STORAGE_KEY + '_damaged_' + Date.now(), raw); } catch (_) { }
+        return normalizeState(getInitialData());
+      }
+    }
+
+    let state = loadData();
+
+    function saveData() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {
+        if (!storageWarned) {
+          storageWarned = true;
+          alert('Could not save data on this phone (storage full or blocked). Please download a backup from Settings.');
+        }
+      }
+      updateHeader();
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-text').innerText = msg;
+      toast.classList.remove('hidden');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toast.classList.add('hidden'), 2800);
+    }
+
+    function getActiveBranch() {
+      return state.branches.find(b => b.id === state.activeBranchId) || state.branches[0];
+    }
+
+    function updateHeader() {
+      const activeBranch = getActiveBranch();
+      document.getElementById('header-owner-name').innerText = state.profile.name || 'Library Owner';
+      document.getElementById('header-library-name').innerText = state.profile.libraryName || 'Self Study Library';
+
+      const branchSelect = document.getElementById('branch-select');
+      branchSelect.innerHTML = state.branches.map(b => `<option value="${esc(b.id)}" ${b.id === activeBranch.id ? 'selected' : ''}>${esc(b.name)}</option>`).join('');
+    }
+
+    function switchBranch(branchId) {
+      state.activeBranchId = branchId;
+      saveData();
+      renderCurrentTab();
+    }
+
+    function navigateTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('text-emerald-700', 'font-bold');
+        btn.classList.add('text-slate-500', 'font-medium');
+      });
+      const activeBtn = document.getElementById(`nav-${tab}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-500', 'font-medium');
+        activeBtn.classList.add('text-emerald-700', 'font-bold');
+      }
+      renderCurrentTab();
+    }
+
+    function closeModal() {
+      document.getElementById('modal-container').innerHTML = '';
+    }
+
+    function isModalOpen() {
+      return document.getElementById('modal-container').innerHTML.trim() !== '';
+    }
+
+    // STRICT SEAT CONFLICT VALIDATOR (Prevents 2 students on same seat and shift)
+    function validateSeatAvailability(branchId, seatNumber, shift, studentIdToIgnore = null) {
+      const existing = state.students.filter(s =>
+        s.branchId === branchId &&
+        s.status === 'active' &&
+        s.seatNumber === seatNumber &&
+        s.id !== studentIdToIgnore
+      );
+
+      if (existing.length === 0) return { available: true };
+
+      const label = lab(branchId, seatNumber);
+
+      // If existing student has Full Day, no other student can occupy this seat
+      const hasFullDay = existing.some(s => s.shift === 'full_day');
+      if (hasFullDay) {
+        const occ = existing.find(s => s.shift === 'full_day');
+        return { available: false, message: `${label} is already occupied by ${occ.name} for Full Day.` };
+      }
+
+      // If requested shift is Full Day, but seat already has a student in any shift
+      if (shift === 'full_day') {
+        return { available: false, message: `${label} already has shift students. Full Day is not available.` };
+      }
+
+      // If requested shift is already occupied
+      const sameShift = existing.find(s => s.shift === shift);
+      if (sameShift) {
+        return { available: false, message: `${label} is already occupied in ${getShiftShortText(shift)} by ${sameShift.name}.` };
+      }
+
+      return { available: true };
+    }
+
+    // Unique receipt number (INV-YYYYMM-001, 002 ... never repeats)
+    function nextInvoiceNumber() {
+      const d = new Date();
+      const prefix = `INV-${d.getFullYear()}${pad2(d.getMonth() + 1)}-`;
+      let max = 0;
+      state.payments.forEach(p => {
+        if (typeof p.invoiceNumber === 'string' && p.invoiceNumber.startsWith(prefix)) {
+          const n = parseInt(p.invoiceNumber.slice(prefix.length), 10);
+          if (n > max) max = n;
+        }
+      });
+      return prefix + String(max + 1).padStart(3, '0');
+    }
+
+    // FEES RECEIVED ACTION (+1 Month Extension)
+    function collectFee(studentId) {
+      const student = state.students.find(s => s.id === studentId);
+      if (!student || student.status !== 'active') return;
+
+      // Protect against accidental double taps
+      const now = Date.now();
+      if (lastCollect.id === studentId && now - lastCollect.t < 2000) return;
+      lastCollect = { id: studentId, t: now };
+
+      const today = getTodayString();
+      const anchor = student.anchorDay || parseInt(String(student.nextDueDate || today).slice(8, 10), 10);
+      const newDueDate = addOneMonth(student.nextDueDate || today, anchor);
+      student.lastPaymentDate = today;
+      student.nextDueDate = newDueDate;
+
+      const payment = {
+        id: `pay_${Date.now()}`,
+        invoiceNumber: nextInvoiceNumber(),
+        branchId: student.branchId,
+        studentId: student.id,
+        studentName: student.name,
+        seatNumber: student.seatNumber,
+        shift: student.shift,
+        amount: student.monthlyFee,
+        paymentDate: today,
+        paymentMode: 'cash'
+      };
+      state.payments.unshift(payment);
+      saveData();
+
+      closeModal();
+      showToast(`₹${student.monthlyFee} fee received. Due extended to ${newDueDate}`);
+      openReceiptModal(payment, student);
+      renderCurrentTab();
+    }
+
+    function getWhatsAppReminderLink(student) {
+      const days = getDaysRemaining(student.nextDueDate);
+      const sl = lab(student.branchId, student.seatNumber);
+      const sh = getShiftShortText(student.shift);
+      const lib = state.profile.libraryName;
+      const upi = state.profile.upiId ? ` Pay via UPI: ${state.profile.upiId}.` : '';
+      let msg = '';
+      if (days < 0) {
+        msg = `Dear ${student.name}, your monthly library fee of ₹${student.monthlyFee} for ${sl} (${sh}) is overdue by ${Math.abs(days)} days (Due: ${student.nextDueDate}). Please pay to avoid cancellation.${upi} — ${lib}`;
+      } else if (days <= 3) {
+        msg = `Dear ${student.name}, reminder: your monthly library fee of ₹${student.monthlyFee} for ${sl} (${sh}) is due in ${days} days (${student.nextDueDate}).${upi} — ${lib}`;
+      } else {
+        msg = `Dear ${student.name}, your library seat ${sl} is active. Next due date is ${student.nextDueDate}. — ${lib}`;
+      }
+      return waLink(student.phone, msg);
+    }
+
+    function openReceiptModal(payment, student) {
+      lastReceipt = { payment, student };
+      const container = document.getElementById('modal-container');
+      const deskDisplay = `Desk ${lab(payment.branchId, payment.seatNumber)}`;
+      const fullPhone = student ? student.phone : '';
+
+      const waReceiptMsg = `*FEE PAYMENT RECEIPT*\n` +
+        `Library: ${state.profile.libraryName}\n` +
+        `Receipt No: ${payment.invoiceNumber}\n` +
+        `Student: ${payment.studentName}\n` +
+        `Seat: ${deskDisplay} (${getShiftShortText(payment.shift)})\n` +
+        `Amount Paid: ₹${payment.amount}\n` +
+        `Payment Date: ${payment.paymentDate}\n` +
+        `Next Due Date: ${student ? student.nextDueDate : 'Updated'}\n\n` +
+        `Thank you for studying with us!`;
+
+      const waReceiptUrl = waLink(fullPhone, waReceiptMsg);
+
+      container.innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div class="w-full max-w-sm bg-white rounded-3xl p-5 space-y-3 text-center">
+            <span class="text-3xl">🧾</span>
+            <h3 class="text-base font-black text-slate-900">Payment Recorded</h3>
+            <div class="bg-emerald-50 text-emerald-900 p-3 rounded-2xl border border-emerald-200">
+              <span class="text-2xl font-black">₹${esc(payment.amount)}</span>
+              <p class="text-[11px] font-semibold text-emerald-700">Fee Received Successfully</p>
+            </div>
+            <div class="bg-slate-50 p-3 rounded-2xl border text-xs text-left space-y-1">
+              <div>Student: <strong>${esc(payment.studentName)}</strong></div>
+              <div>Desk &amp; Shift: <strong>${esc(deskDisplay)} (${esc(getShiftShortText(payment.shift))})</strong></div>
+              <div>Receipt No: <strong>${esc(payment.invoiceNumber)}</strong></div>
+              <div>Date: <strong>${esc(payment.paymentDate)}</strong></div>
+            </div>
+            ${fullPhone ? `
+              <a href="${esc(waReceiptUrl)}" target="_blank" class="w-full py-2.5 bg-emerald-600 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-xs">
+                <span>Send Receipt on WhatsApp</span>
+              </a>
+            ` : ''}
+            <button onclick="printReceipt()" class="w-full py-2 bg-slate-100 font-bold text-xs rounded-xl">Print / Save PDF</button>
+            <button onclick="closeModal()" class="w-full py-2 bg-slate-900 text-white font-bold text-xs rounded-xl">Close</button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Prints the receipt itself (the old button printed an empty page)
+    function printReceipt() {
+      if (!lastReceipt) return;
+      const p = lastReceipt.payment;
+      const s = lastReceipt.student;
+      const printable = document.getElementById('printable-passbook');
+      printable.innerHTML = `
+        <div style="font-family: sans-serif; padding: 20px; max-width: 420px;">
+          <h2 style="margin: 0; font-size: 20px;">${esc(state.profile.libraryName || 'Library')}</h2>
+          <p style="margin: 2px 0 12px 0; font-size: 12px; color: #666;">${esc(state.profile.address || '')}${state.profile.phone ? ' • ' + esc(state.profile.phone) : ''}</p>
+          <hr />
+          <h3 style="margin: 12px 0 8px 0; font-size: 16px;">FEE PAYMENT RECEIPT</h3>
+          <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+            <tr><td style="padding: 5px 0; color: #555;">Receipt No</td><td style="text-align: right; font-weight: bold;">${esc(p.invoiceNumber)}</td></tr>
+            <tr><td style="padding: 5px 0; color: #555;">Date</td><td style="text-align: right; font-weight: bold;">${esc(p.paymentDate)}</td></tr>
+            <tr><td style="padding: 5px 0; color: #555;">Student</td><td style="text-align: right; font-weight: bold;">${esc(p.studentName)}</td></tr>
+            <tr><td style="padding: 5px 0; color: #555;">Desk</td><td style="text-align: right; font-weight: bold;">${esc(lab(p.branchId, p.seatNumber))} (${esc(getShiftShortText(p.shift))})</td></tr>
+            <tr><td style="padding: 5px 0; color: #555;">Payment Mode</td><td style="text-align: right; font-weight: bold;">${esc(p.paymentMode)}</td></tr>
+            ${s ? `<tr><td style="padding: 5px 0; color: #555;">Next Due Date</td><td style="text-align: right; font-weight: bold;">${esc(s.nextDueDate)}</td></tr>` : ''}
+            <tr><td style="padding: 10px 0; font-size: 15px;">Amount Paid</td><td style="text-align: right; font-weight: bold; font-size: 18px; color: #047857;">₹${esc(p.amount)}</td></tr>
+          </table>
+          <p style="margin-top: 16px; font-size: 12px; color: #666;">Thank you for studying with us!</p>
+        </div>
+      `;
+      window.print();
+    }
+
+    // TAB 1: HOME VIEW (Dashboard + Analytics Merged)
+    function renderHomeView() {
+      const branch = getActiveBranch();
+      const branchStudents = activeStudents(branch.id);
+      const bSeats = getBranchSeats(branch.id);
+      const totalDesks = bSeats.length;
+      const occupiedSeatNumbers = occupiedCount(branch.id, bSeats);
+      const occupancyPct = totalDesks > 0 ? Math.round((occupiedSeatNumbers / totalDesks) * 100) : 0;
+
+      const todayStr = getTodayString();
+      const todayIncome = state.payments
+        .filter(p => p.branchId === branch.id && p.paymentDate === todayStr)
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      const thisMonth = todayStr.substring(0, 7);
+      const monthIncome = state.payments
+        .filter(p => p.branchId === branch.id && (p.paymentDate || '').startsWith(thisMonth))
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      const duesList = branchStudents
+        .filter(s => getDaysRemaining(s.nextDueDate) <= 3)
+        .sort((a, b) => getDaysRemaining(a.nextDueDate) - getDaysRemaining(b.nextDueDate));
+
+      return `
+        <!-- Live Status Hero Banner -->
+        <div class="bg-gradient-to-br from-indigo-900 via-indigo-800 to-emerald-800 text-white rounded-3xl p-5 shadow-lg relative overflow-hidden space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="text-[10px] font-black uppercase tracking-wider text-emerald-300">Live Status</span>
+          </div>
+          <h2 class="text-2xl font-black tracking-tight">${esc(state.profile.libraryName)} Today</h2>
+          <div class="flex items-center gap-3 text-xs text-indigo-100 font-semibold">
+            <span>${branchStudents.length} Active Students</span>
+            <span>•</span>
+            <span class="text-emerald-300 font-bold">₹${money(todayIncome)} Received Today</span>
+          </div>
+        </div>
+
+        <!-- Metric Grid -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-xs flex items-center justify-between">
+            <div>
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Students</p>
+              <h3 class="text-2xl font-black text-slate-900">${branchStudents.length}</h3>
+            </div>
+            <div class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-lg">👥</div>
+          </div>
+
+          <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-xs flex items-center justify-between">
+            <div>
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Today's Fees</p>
+              <h3 class="text-2xl font-black text-emerald-700">₹${money(todayIncome)}</h3>
+            </div>
+            <div class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-lg">💵</div>
+          </div>
+
+          <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-xs flex items-center justify-between">
+            <div>
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Monthly Fees</p>
+              <h3 class="text-2xl font-black text-indigo-700">₹${money(monthIncome)}</h3>
+            </div>
+            <div class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center text-lg">📈</div>
+          </div>
+
+          <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-xs flex items-center justify-between">
+            <div>
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Occupancy</p>
+              <h3 class="text-2xl font-black text-slate-900">${occupancyPct}%</h3>
+            </div>
+            <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center text-lg">🪑</div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div>
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">Quick Actions</h3>
+          <div class="grid grid-cols-3 gap-2">
+            <!-- Add Student -->
+            <button onclick="openAdmissionModal()" class="h-24 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white p-3 text-left flex flex-col justify-between shadow-xs active:scale-95 transition-transform">
+              <span class="text-lg">👤+</span>
+              <div>
+                <div class="text-xs font-bold leading-tight">Add Student</div>
+                <div class="text-[9px] text-emerald-100">New admission</div>
+              </div>
+            </button>
+
+            <!-- Share Library on WhatsApp -->
+            <button onclick="openShareLibraryModal()" class="h-24 rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-700 text-white p-3 text-left flex flex-col justify-between shadow-xs active:scale-95 transition-transform">
+              <span class="text-lg">📢</span>
+              <div>
+                <div class="text-xs font-bold leading-tight">Share Library</div>
+                <div class="text-[9px] text-teal-100">Send on WhatsApp</div>
+              </div>
+            </button>
+
+            <!-- Seat Map -->
+            <button onclick="navigateTab('seats')" class="h-24 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-3 text-left flex flex-col justify-between shadow-xs active:scale-95 transition-transform">
+              <span class="text-lg">🪑</span>
+              <div>
+                <div class="text-xs font-bold leading-tight">Seat Map</div>
+                <div class="text-[9px] text-blue-100">Visual canvas</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Attention Needed: Dues Pending List -->
+        ${duesList.length > 0 ? `
+          <div class="space-y-2">
+            <div class="flex items-center justify-between px-1">
+              <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <span>Fee Dues Pending (${duesList.length})</span>
+              </h3>
+            </div>
+            <div class="space-y-2">
+              ${duesList.map(s => {
+                const days = getDaysRemaining(s.nextDueDate);
+                const isOver = days < 0;
+                return `
+                  <div class="${isOver ? 'bg-rose-50/20' : 'bg-amber-50/20'} rounded-2xl p-3 border ${isOver ? 'border-rose-200' : 'border-amber-200'} flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-xl ${isOver ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-800'} font-black text-xs flex items-center justify-center">
+                        ${esc(lab(branch.id, s.seatNumber))}
+                      </div>
+                      <div>
+                        <div class="text-xs font-bold text-slate-900">${esc(s.name)}</div>
+                        <div class="text-[10px] text-slate-500 font-medium">₹${esc(s.monthlyFee)} • <strong class="${isOver ? 'text-rose-600' : 'text-amber-600'}">${isOver ? Math.abs(days) + 'd overdue' : 'Due in ' + days + 'd'}</strong></div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <a href="${esc(getWhatsAppReminderLink(s))}" target="_blank" class="p-2 rounded-xl bg-emerald-50 text-emerald-700 text-xs">💬</a>
+                      <button onclick="collectFee('${s.id}')" class="px-2.5 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xs">Fees Received</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        ` : ''}
+      `;
+    }
+
+    // SHARE MY LIBRARY MODAL (With Checkboxes)
+    function openShareLibraryModal() {
+      const branch = getActiveBranch();
+      const bSeats = getBranchSeats(branch.id);
+      const vacant = Math.max(0, bSeats.length - occupiedCount(branch.id, bSeats));
+
+      const container = document.getElementById('modal-container');
+      container.innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
+          <div class="w-full max-w-sm bg-white rounded-3xl p-5 space-y-4">
+            <div class="flex justify-between items-center border-b pb-2">
+              <h3 class="text-base font-black text-slate-900">Share Library on WhatsApp</h3>
+              <button onclick="closeModal()" class="text-slate-400 font-bold text-lg">✕</button>
+            </div>
+
+            <p class="text-xs text-slate-500">Select what details you want to include in your message:</p>
+
+            <div class="space-y-2 text-xs">
+              <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-xl cursor-pointer">
+                <input type="checkbox" id="sh-name" checked class="w-4 h-4 text-emerald-600 rounded">
+                <span class="font-bold text-slate-800">Library Name: ${esc(state.profile.libraryName)}</span>
+              </label>
+
+              <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-xl cursor-pointer">
+                <input type="checkbox" id="sh-seats" checked class="w-4 h-4 text-emerald-600 rounded">
+                <span class="font-bold text-slate-800">Available Seats: ${vacant} Vacant Desks</span>
+              </label>
+
+              <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-xl cursor-pointer">
+                <input type="checkbox" id="sh-amenities" checked class="w-4 h-4 text-emerald-600 rounded">
+                <span class="font-bold text-slate-800">Amenities: AC, 5G WiFi, RO Cold Water, Ergonomic Chairs</span>
+              </label>
+
+              <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-xl cursor-pointer">
+                <input type="checkbox" id="sh-address" checked class="w-4 h-4 text-emerald-600 rounded">
+                <span class="font-bold text-slate-800">Address: ${esc(state.profile.address || 'Near Main Market')}</span>
+              </label>
+
+              <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-xl cursor-pointer">
+                <input type="checkbox" id="sh-phone" checked class="w-4 h-4 text-emerald-600 rounded">
+                <span class="font-bold text-slate-800">Contact Number: ${esc(state.profile.phone)}</span>
+              </label>
+            </div>
+
+            <button onclick="sendLibraryShareWhatsApp()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-md">
+              <span>Send Message on WhatsApp</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function sendLibraryShareWhatsApp() {
+      const branch = getActiveBranch();
+      const bSeats = getBranchSeats(branch.id);
+      const vacant = Math.max(0, bSeats.length - occupiedCount(branch.id, bSeats));
+
+      let msg = `*📚 ${state.profile.libraryName || 'Self Study Library'}* 📚\n\n`;
+
+      if (document.getElementById('sh-seats').checked) {
+        msg += `🟢 *Seats Update:* ${vacant} Vacant Desks Available Now!\n\n`;
+      }
+      if (document.getElementById('sh-amenities').checked) {
+        msg += `✨ *Facilities Provided:*\n• Air Conditioned (AC) Silent Study Hall\n• High-Speed 5G WiFi & Personal Power Sockets\n• Comfortable Ergonomic Study Chairs\n• RO Cold Water & Clean Washrooms\n• 24x7 CCTV Security & Biometric Access\n\n`;
+      }
+      if (document.getElementById('sh-address').checked) {
+        msg += `📍 *Location:* ${state.profile.address || 'Main Road'}\n`;
+      }
+      if (document.getElementById('sh-phone').checked && state.profile.phone) {
+        msg += `📞 *Call / WhatsApp for Booking:* ${state.profile.phone}\n`;
+      }
+
+      msg += `\nReserve your peaceful study space today!`;
+
+      const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+      window.open(url, '_blank');
+      closeModal();
+    }
+
+    // ==========================================
+    // TAB 3: SEAT MAP (Interactive Room Floor Canvas)
+    // ==========================================
+    const clampX = v => Math.max(6, Math.min(94, Math.round(v)));
+    const clampY = v => Math.max(8, Math.min(92, Math.round(v)));
+
+    function renderSeatsView() {
+      const branch = getActiveBranch();
+      const bSeats = getBranchSeats(branch.id);
+      const shifts = state.shifts;
+      const rank = { overdue: 3, due_soon: 2, paid: 1 };
+
+      return `
+        <!-- Top Toolbar -->
+        <div class="flex items-center justify-between px-1">
+          <div>
+            <h2 class="text-xl font-black text-slate-900 tracking-tight">Room Seat Map</h2>
+            <p class="text-xs text-slate-500 font-semibold">${bSeats.length} Desks • Real Floor Plan</p>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="openShiftManagerModal()" class="text-xs font-bold text-slate-700 bg-white border border-slate-300 px-2.5 py-1.5 rounded-xl shadow-xs">
+              ⏰ Shifts
+            </button>
+            <button onclick="toggleMapEditMode()" class="text-xs font-black px-3 py-1.5 rounded-xl shadow-xs transition-all ${isMapEditMode ? 'bg-amber-500 text-slate-950 ring-2 ring-amber-300' : 'bg-slate-900 text-white'}">
+              ${isMapEditMode ? '🔒 Lock Map (Done)' : '✏️ Map Edit'}
+            </button>
+          </div>
+        </div>
+
+        ${isMapEditMode ? `
+          <!-- Map Edit Instructions & Tools Banner -->
+          <div class="bg-amber-50 border border-amber-300 rounded-2xl p-3 text-xs text-amber-950 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-black flex items-center gap-1">
+                <span>📐 Room Floor Designer Active</span>
+              </span>
+              <span class="text-[10px] font-bold bg-amber-200/80 px-2 py-0.5 rounded-md">Edit Mode</span>
+            </div>
+            <p class="text-[11px] font-medium leading-relaxed">
+              • <strong>Tap empty room space:</strong> Adds next seat dot (1, 2, 3...) at that exact spot.<br/>
+              • <strong>Drag dots:</strong> Move any dot anywhere to match your room rows &amp; corner cabins.<br/>
+              • <strong>Tap dot:</strong> Change seat number/label or delete desk.
+            </p>
+            <div class="flex items-center gap-2 pt-1 border-t border-amber-200/60">
+              <button onclick="addBatchDesks(5)" class="flex-1 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-xl shadow-xs">
+                + Add Row of 5 Desks
+              </button>
+              <button onclick="clearAllDesks()" class="px-3 py-1.5 bg-rose-50 border border-rose-300 text-rose-700 font-bold text-[11px] rounded-xl">
+                Clear All
+              </button>
+            </div>
+          </div>
+        ` : `
+          <!-- Shift Filter Pills -->
+          <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+            <button onclick="setShiftFilter('all')" class="px-3 py-1 rounded-xl text-xs font-bold shrink-0 ${seatShiftFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-white border text-slate-600'}">All Shifts</button>
+            ${shifts.map(sh => `
+              <button onclick="setShiftFilter('${sh.id}')" class="px-3 py-1 rounded-xl text-xs font-bold shrink-0 ${seatShiftFilter === sh.id ? 'bg-emerald-700 text-white' : 'bg-white border text-slate-600'}">
+                ${esc(sh.name)}
+              </button>
+            `).join('')}
+          </div>
+
+          <!-- 4-Color Legend -->
+          <div class="bg-white rounded-2xl p-2.5 border border-slate-200 flex items-center justify-between text-[11px] font-bold">
+            <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-600"></span><span>Paid</span></div>
+            <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-amber-400"></span><span>3 Days Due</span></div>
+            <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-rose-500"></span><span>Overdue</span></div>
+            <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-slate-300"></span><span>Vacant</span></div>
+          </div>
+        `}
+
+        <!-- Interactive Room Floor Canvas Area -->
+        <div class="space-y-1">
+          <div class="flex items-center justify-between px-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            <span>Room Layout Canvas</span>
+            <span>${isMapEditMode ? 'Tap canvas to add desk' : 'Tap seat for student info'}</span>
+          </div>
+
+          <div
+            id="room-canvas"
+            onclick="handleCanvasTap(event)"
+            class="relative w-full h-[470px] rounded-3xl border-2 ${isMapEditMode ? 'border-amber-400 bg-amber-50/20 touch-none' : 'bg-white border-slate-300'} shadow-sm overflow-hidden select-none"
+            style="background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px; touch-action: ${isMapEditMode ? 'none' : 'pan-y'};"
+          >
+            <!-- Room Top Marker (Whiteboard / Stage) -->
+            <div class="absolute top-2 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-slate-200/90 text-slate-600 text-[10px] font-bold tracking-wider pointer-events-none border border-slate-300">
+              FRONT / WHITEBOARD
+            </div>
+
+            <!-- Room Bottom Marker (Door) -->
+            <div class="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold tracking-wider pointer-events-none border border-emerald-300">
+              🚪 MAIN ENTRANCE DOOR
+            </div>
+
+            <!-- Dynamic Seat Dots on Canvas -->
+            ${bSeats.map(seat => {
+              const onSeat = studentsOnSeat(branch.id, seat.seatNumber);
+
+              let bgClass = 'bg-slate-300 text-slate-800 border-slate-400';
+              let statusLabel = 'Vacant';
+
+              if (onSeat.length) {
+                // Colour of the most urgent student on this seat
+                let worst = onSeat[0];
+                onSeat.forEach(s => { if (rank[getStudentStatus(s)] > rank[getStudentStatus(worst)]) worst = s; });
+                const status = getStudentStatus(worst);
+                if (status === 'overdue') {
+                  bgClass = 'bg-rose-500 text-white border-rose-600 shadow-rose-500/40';
+                } else if (status === 'due_soon') {
+                  bgClass = 'bg-amber-400 text-amber-950 border-amber-500 shadow-amber-400/40';
+                } else {
+                  bgClass = 'bg-emerald-600 text-white border-emerald-700 shadow-emerald-600/40';
+                }
+                statusLabel = esc(worst.name.split(' ')[0]);
+              }
+
+              if (isMapEditMode) {
+                bgClass = 'bg-amber-500 text-slate-950 border-amber-600 ring-2 ring-white shadow-md cursor-grab active:cursor-grabbing';
+                statusLabel = 'Drag';
+              }
+
+              return `
+                <div
+                  id="dot-seat-${seat.seatNumber}"
+                  class="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center w-11 h-11 rounded-2xl border-2 font-black shadow-md transition-transform active:scale-90 ${bgClass}"
+                  style="left: ${seat.x || 15}%; top: ${seat.y || 20}%; z-index: ${isMapEditMode ? 20 : 10};"
+                  onpointerdown="handleDotPointerDown(event, ${seat.seatNumber})"
+                >
+                  <span class="text-[11px] leading-tight truncate max-w-[38px]">${esc(seat.label || seat.seatNumber)}</span>
+                  <span class="text-[8px] font-bold opacity-90 truncate max-w-[38px] leading-none">${statusLabel}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function toggleMapEditMode() {
+      isMapEditMode = !isMapEditMode;
+      renderCurrentTab();
+    }
+
+    // POINTER HANDLER FOR SEAT DRAGGING & TAPPING ON CANVAS
+    function handleDotPointerDown(e, seatNumber) {
+      e.stopPropagation();
+      const dot = e.currentTarget;
+      dot.setPointerCapture(e.pointerId);
+
+      activeDragSeat = seatNumber;
+      dragStartPos = { x: e.clientX, y: e.clientY };
+      didMoveDrag = false;
+
+      dot.onpointermove = (m) => {
+        if (!isMapEditMode) return;
+        if (Math.abs(m.clientX - dragStartPos.x) > 4 || Math.abs(m.clientY - dragStartPos.y) > 4) didMoveDrag = true;
+        if (!didMoveDrag) return;
+
+        const canvas = document.getElementById('room-canvas');
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const nx = clampX(((m.clientX - rect.left) / rect.width) * 100);
+        const ny = clampY(((m.clientY - rect.top) / rect.height) * 100);
+        dot.style.left = nx + '%';
+        dot.style.top = ny + '%';
+
+        const s = getBranchSeats(getActiveBranch().id).find(t => t.seatNumber === seatNumber);
+        if (s) { s.x = nx; s.y = ny; }
+      };
+
+      dot.onpointerup = (u) => {
+        try { dot.releasePointerCapture(u.pointerId); } catch (_) { }
+        dot.onpointermove = null;
+        dot.onpointerup = null;
+        window.__dotUp = Date.now();
+        const moved = didMoveDrag;
+        didMoveDrag = false;
+        activeDragSeat = null;
+        if (moved) {
+          saveData();
+        } else if (isMapEditMode) {
+          openEditDotModal(seatNumber);
+        } else {
+          openSeatModal(seatNumber);
+        }
+      };
+    }
+
+    // CANVAS TAP TO ADD SEQUENTIAL DOT AT COORDINATE (1, 2, 3...)
+    function handleCanvasTap(e) {
+      if (!isMapEditMode) return;
+      if (e.target.closest && e.target.closest('[id^="dot-seat-"]')) return;
+      if (Date.now() - (window.__dotUp || 0) < 500) return;
+
+      const canvas = document.getElementById('room-canvas');
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = clampX(((e.clientX - rect.left) / rect.width) * 100);
+      const y = clampY(((e.clientY - rect.top) / rect.height) * 100);
+
+      const branch = getActiveBranch();
+      const list = getBranchSeats(branch.id);
+      const n = Math.max(0, ...list.map(s => s.seatNumber)) + 1;
+      const label = uniqueLabel(list, `S-${n}`);
+
+      state.seats.push({ id: `seat_${branch.id}_${n}`, branchId: branch.id, seatNumber: n, label, x, y, isAisle: false });
+      branch.totalSeats = list.length + 1;
+      branch.seatsInit = true;
+      saveData();
+      showToast(`Desk ${label} placed!`);
+      renderCurrentTab();
+    }
+
+    // BATCH ADD ROW OF 5 DESKS
+    function addBatchDesks(count = 5) {
+      const branch = getActiveBranch();
+      const list = getBranchSeats(branch.id);
+      const start = Math.max(0, ...list.map(s => s.seatNumber)) + 1;
+      const y = Math.min(88, list.length ? Math.max(...list.map(s => s.y)) + 16 : 20);
+
+      for (let i = 0; i < count; i++) {
+        const n = start + i;
+        const label = uniqueLabel(state.seats.filter(s => s.branchId === branch.id), `S-${n}`);
+        state.seats.push({ id: `seat_${branch.id}_${n}`, branchId: branch.id, seatNumber: n, label, x: 14 + i * 18, y, isAisle: false });
+      }
+      branch.totalSeats = list.length + count;
+      branch.seatsInit = true;
+      saveData();
+      showToast(`Added ${count} new desks!`);
+      renderCurrentTab();
+    }
+
+    // CLEAR ALL DESKS FROM ROOM
+    function clearAllDesks() {
+      const branch = getActiveBranch();
+      if (activeStudents(branch.id).length) {
+        alert('This branch still has students. Please vacate all students first, then you can clear all desks.');
+        return;
+      }
+      if (!confirm('Are you sure you want to clear all desks from this room?')) return;
+      state.seats = state.seats.filter(s => s.branchId !== branch.id);
+      branch.totalSeats = 0;
+      branch.seatsInit = true;
+      saveData();
+      showToast('All desks cleared from map.');
+      renderCurrentTab();
+    }
+
+    // MODAL TO RENAME OR DELETE SEAT DOT IN EDIT MODE
+    function openEditDotModal(seatNum) {
+      const branch = getActiveBranch();
+      const bSeats = getBranchSeats(branch.id);
+      const seat = bSeats.find(s => s.seatNumber === seatNum);
+      if (!seat) return;
+
+      const container = document.getElementById('modal-container');
+      container.innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
+          <div class="w-full max-w-sm bg-white rounded-3xl p-5 space-y-4">
+            <div class="flex justify-between items-center border-b pb-2">
+              <h3 class="text-base font-black text-slate-900">Desk #${seat.seatNumber} Settings</h3>
+              <button onclick="closeModal()" class="text-slate-400 font-bold text-lg">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Desk Number / Label</label>
+                <input type="text" id="edit-seat-label" maxlength="20" value="${esc(seat.label || 'S-' + seat.seatNumber)}" placeholder="e.g. S-1, Cabin 4, 101" class="w-full px-3 py-2 border rounded-xl font-bold text-sm bg-white" />
+                <p class="text-[10px] text-slate-500 mt-1">Type the number or label written on your real physical library desk.</p>
+              </div>
+
+              <!-- Quick Presets -->
+              <div>
+                <span class="text-[10px] font-bold text-slate-400 uppercase">Presets:</span>
+                <div class="flex items-center gap-1.5 flex-wrap mt-1">
+                  <button type="button" onclick="document.getElementById('edit-seat-label').value='Desk ${seat.seatNumber}'" class="px-2 py-1 bg-slate-100 rounded-lg text-[10px] font-bold">Desk ${seat.seatNumber}</button>
+                  <button type="button" onclick="document.getElementById('edit-seat-label').value='S-${seat.seatNumber}'" class="px-2 py-1 bg-slate-100 rounded-lg text-[10px] font-bold">S-${seat.seatNumber}</button>
+                  <button type="button" onclick="document.getElementById('edit-seat-label').value='Cabin ${seat.seatNumber}'" class="px-2 py-1 bg-slate-100 rounded-lg text-[10px] font-bold">Cabin ${seat.seatNumber}</button>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2 pt-2">
+                <button onclick="deleteSeatDot(${seat.seatNumber})" class="flex-1 py-2.5 bg-rose-50 border border-rose-300 text-rose-700 font-bold text-xs rounded-xl">
+                  🗑️ Delete Desk
+                </button>
+                <button onclick="saveSeatDotLabel(${seat.seatNumber})" class="flex-1 py-2.5 bg-slate-900 text-white font-black text-xs rounded-xl shadow-md">
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function saveSeatDotLabel(seatNum) {
+      const branch = getActiveBranch();
+      const list = getBranchSeats(branch.id);
+      const target = list.find(s => s.seatNumber === seatNum);
+      if (!target) return;
+      const label = document.getElementById('edit-seat-label').value.trim().slice(0, 20) || `S-${seatNum}`;
+      if (list.some(s => s !== target && (s.label || '').toLowerCase() === label.toLowerCase())) {
+        alert('This label is already used by another desk. Please type a different one.');
+        return;
+      }
+      target.label = label;
+      saveData();
+      closeModal();
+      showToast(`Desk ${label} updated!`);
+      renderCurrentTab();
+    }
+
+    function deleteSeatDot(seatNum) {
+      const branch = getActiveBranch();
+      if (activeStudents(branch.id).some(s => s.seatNumber === seatNum)) {
+        alert('A student is sitting on this desk. Vacate the student first, or move the student to another desk from the Students tab (Edit).');
+        return;
+      }
+      if (!confirm(`Delete ${lab(branch.id, seatNum)} from room?`)) return;
+      state.seats = state.seats.filter(s => !(s.branchId === branch.id && s.seatNumber === seatNum));
+      branch.totalSeats = state.seats.filter(s => s.branchId === branch.id).length;
+      branch.seatsInit = true;
+      saveData();
+      closeModal();
+      showToast(`Desk ${seatNum} removed.`);
+      renderCurrentTab();
+    }
+
+    // Modal to Manage Shifts & Custom Timings
+    function openShiftManagerModal() {
+      const shifts = state.shifts;
+      const container = document.getElementById('modal-container');
+
+      container.innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
+          <div class="w-full max-w-sm bg-white rounded-3xl p-5 space-y-4 max-h-[85vh] overflow-y-auto no-scrollbar">
+            <div class="flex justify-between items-center border-b pb-2">
+              <div>
+                <h3 class="text-base font-black text-slate-900">Shift Timings &amp; Fees</h3>
+                <p class="text-[10px] text-slate-500 font-semibold">Customize your library's daily shifts</p>
+              </div>
+              <button onclick="closeModal()" class="text-slate-400 font-bold text-lg">✕</button>
+            </div>
+
+            <div id="shifts-list" class="space-y-3">
+              ${shifts.map((sh, index) => `
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="font-extrabold text-slate-800">Shift #${index + 1}</span>
+                    ${shifts.length > 1 ? `
+                      <button onclick="deleteShift('${sh.id}')" class="text-rose-600 font-bold text-[11px]">Delete</button>
+                    ` : ''}
+                  </div>
+                  <div>
+                    <label class="font-bold text-slate-600 block mb-0.5 text-[10px]">Shift Name</label>
+                    <input type="text" id="sh-name-${sh.id}" maxlength="40" value="${esc(sh.name)}" class="w-full px-2.5 py-1.5 border rounded-xl font-bold bg-white" />
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="font-bold text-slate-600 block mb-0.5 text-[10px]">Start Time</label>
+                      <input type="text" id="sh-start-${sh.id}" maxlength="12" value="${esc(sh.startTime)}" placeholder="06:00 AM" class="w-full px-2 py-1.5 border rounded-xl font-semibold bg-white" />
+                    </div>
+                    <div>
+                      <label class="font-bold text-slate-600 block mb-0.5 text-[10px]">End Time</label>
+                      <input type="text" id="sh-end-${sh.id}" maxlength="12" value="${esc(sh.endTime)}" placeholder="02:00 PM" class="w-full px-2 py-1.5 border rounded-xl font-semibold bg-white" />
+                    </div>
+                  </div>
+                  <div>
+                    <label class="font-bold text-slate-600 block mb-0.5 text-[10px]">Default Monthly Fee (₹)</label>
+                    <input type="number" min="0" id="sh-fee-${sh.id}" value="${esc(sh.defaultFee)}" class="w-full px-2.5 py-1.5 border rounded-xl font-bold text-emerald-800 bg-white" />
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+
+            <!-- Add Shift Form -->
+            <div class="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3 text-xs space-y-2">
+              <span class="font-bold text-emerald-900 block">+ Add New Custom Shift</span>
+              <input type="text" id="new-sh-name" maxlength="40" placeholder="e.g. Afternoon Extra" class="w-full px-2.5 py-1.5 border rounded-xl font-semibold bg-white" />
+              <div class="grid grid-cols-2 gap-2">
+                <input type="text" id="new-sh-start" maxlength="12" placeholder="02:00 PM" class="w-full px-2 py-1.5 border rounded-xl font-semibold bg-white" />
+                <input type="text" id="new-sh-end" maxlength="12" placeholder="07:00 PM" class="w-full px-2 py-1.5 border rounded-xl font-semibold bg-white" />
+              </div>
+              <input type="number" min="0" id="new-sh-fee" placeholder="Monthly Fee (e.g. 700)" class="w-full px-2.5 py-1.5 border rounded-xl font-semibold bg-white" />
+              <button onclick="addNewShift()" class="w-full py-2 bg-emerald-700 text-white rounded-xl font-bold text-xs">
+                Add Shift
+              </button>
+            </div>
+
+            <button onclick="saveAllShifts()" class="w-full py-3 bg-slate-900 text-white rounded-2xl font-black text-xs shadow-md">
+              Save All Shift Changes
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Reads whatever is typed in the shift form into the data (so nothing typed is lost)
+    function readShiftInputs() {
+      state.shifts.forEach(sh => {
+        const nameEl = document.getElementById(`sh-name-${sh.id}`);
+        const startEl = document.getElementById(`sh-start-${sh.id}`);
+        const endEl = document.getElementById(`sh-end-${sh.id}`);
+        const feeEl = document.getElementById(`sh-fee-${sh.id}`);
+
+        if (nameEl) sh.name = nameEl.value.trim().slice(0, 40) || sh.name;
+        if (startEl) sh.startTime = startEl.value.trim().slice(0, 12) || sh.startTime;
+        if (endEl) sh.endTime = endEl.value.trim().slice(0, 12) || sh.endTime;
+        if (feeEl) {
+          const f = Math.round(Number(feeEl.value));
+          if (feeEl.value !== '' && isFinite(f) && f >= 0) sh.defaultFee = f;
+        }
+      });
+    }
+
+    function addNewShift() {
+      readShiftInputs();
+      const name = document.getElementById('new-sh-name').value.trim().slice(0, 40);
+      const start = document.getElementById('new-sh-start').value.trim() || '08:00 AM';
+      const end = document.getElementById('new-sh-end').value.trim() || '02:00 PM';
+      const feeVal = Math.round(Number(document.getElementById('new-sh-fee').value));
+      const fee = isFinite(feeVal) && feeVal > 0 ? feeVal : 800;
+
+      if (!name) {
+        alert('Please enter a shift name.');
+        return;
+      }
+
+      state.shifts.push({
+        id: `shift_${Date.now()}`,
+        name,
+        startTime: start.slice(0, 12),
+        endTime: end.slice(0, 12),
+        defaultFee: fee
+      });
+      saveData();
+      openShiftManagerModal();
+      showToast(`Shift "${name}" added!`);
+    }
+
+    function deleteShift(shiftId) {
+      const using = state.students.filter(s => s.status === 'active' && s.shift === shiftId).length;
+      if (using > 0) {
+        alert(`${using} active student(s) are on this shift. Move them to another shift first (Students tab, Edit), then delete this shift.`);
+        return;
+      }
+      if (!confirm('Are you sure you want to delete this shift?')) return;
+      readShiftInputs();
+      state.shifts = state.shifts.filter(s => s.id !== shiftId);
+      if (seatShiftFilter === shiftId) seatShiftFilter = 'all';
+      saveData();
+      openShiftManagerModal();
+      showToast('Shift deleted.');
+    }
+
+    function saveAllShifts() {
+      readShiftInputs();
+      saveData();
+      closeModal();
+      showToast('Shift timings saved successfully!');
+      renderCurrentTab();
+    }
+
+    function setShiftFilter(sh) {
+      seatShiftFilter = sh;
+      renderCurrentTab();
+    }
+
+    // Seat Tap Modal (In Locked Mode). If 2+ students share a seat (different shifts) the owner picks one first.
+    function openSeatModal(seatNum, studentId = null) {
+      const branch = getActiveBranch();
+      const bSeats = getBranchSeats(branch.id);
+      const seat = bSeats.find(s => s.seatNumber === seatNum) || { seatNumber: seatNum, label: `S-${seatNum}` };
+      const onSeat = studentsOnSeat(branch.id, seatNum);
+      const container = document.getElementById('modal-container');
+
+      let student = null;
+      if (studentId) {
+        student = state.students.find(s => s.id === studentId && s.status === 'active') || null;
+      } else if (onSeat.length > 1) {
+        container.innerHTML = `
+          <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
+            <div class="w-full max-w-sm bg-white rounded-3xl p-5 space-y-3">
+              <div class="flex justify-between items-center">
+                <h3 class="text-base font-black text-slate-900">${esc(seat.label)}: ${onSeat.length} students</h3>
+                <button onclick="closeModal()" class="text-slate-400 font-bold text-lg">✕</button>
+              </div>
+              ${onSeat.map(s => `
+                <button onclick="openSeatModal(${seatNum}, '${s.id}')" class="w-full text-left p-3 rounded-2xl border border-slate-200 bg-slate-50 text-xs">
+                  <b>${esc(s.name)}</b> • ${esc(getShiftShortText(s.shift))}<br>
+                  <span class="text-slate-500">₹${esc(s.monthlyFee)} • due ${esc(s.nextDueDate)}</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        return;
+      } else {
+        student = onSeat[0] || null;
+      }
+
+      if (!student) {
+        container.innerHTML = `
+          <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
+            <div class="w-full max-w-sm bg-white rounded-3xl p-5 space-y-4">
+              <div class="flex justify-between items-center">
+                <h3 class="text-base font-black text-slate-900">${esc(seat.label)} is Vacant</h3>
+                <button onclick="closeModal()" class="text-slate-400 font-bold text-lg">✕</button>
+              </div>
+              <p class="text-xs text-slate-500">This desk is currently available. You can register a new student here.</p>
+              <button onclick="closeModal(); openAdmissionModal(${seatNum})" class="w-full py-3 bg-emerald-600 text-white rounded-2xl font-bold text-xs shadow-md">
+                + Register Student on ${esc(seat.label)}
+              </button>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const days = getDaysRemaining(student.nextDueDate);
+      const isOver = days < 0;
+      const statusText = isOver ? `${Math.abs(days)} days overdue` : (days <= 3 ? `Due in ${days} days` : 'Paid');
+
+      container.innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
+          <div class="w-full max-w-sm bg-white rounded-3xl p-5 space-y-4">
+            <div class="flex justify-between items-center border-b pb-2">
+              <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-2xl bg-emerald-600 text-white font-black text-xs flex items-center justify-center p-1 text-center">
+                  ${esc(seat.label)}
+                </div>
+                <div>
+                  <h3 class="text-base font-black text-slate-900">${esc(student.name)}</h3>
+                  <p class="text-[11px] text-slate-500 font-semibold">${esc(student.phone)}</p>
+                </div>
+              </div>
+              <button onclick="closeModal()" class="text-slate-400 font-bold text-lg">✕</button>
+            </div>
+
+            <div class="bg-slate-50 rounded-2xl p-3.5 border border-slate-100 text-xs space-y-2">
+              <div class="flex justify-between"><span class="text-slate-500">Shift:</span><span class="font-bold text-slate-800">${esc(getShiftDisplayText(student.shift))}</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">Monthly Fees:</span><span class="font-black text-emerald-700">₹${esc(student.monthlyFee)}</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">Next Due Date:</span><span class="font-bold text-slate-900">${esc(student.nextDueDate)} (${statusText})</span></div>
+            </div>
+
+            <button onclick="collectFee('${student.id}')" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-2xl shadow-lg shadow-emerald-600/30 active:scale-95 transition-all">
+              ✓ Fees Received (+1 Month Extend)
+            </button>
+
+            <div class="grid grid-cols-2 gap-2">
+              <a href="${esc(getWhatsAppReminderLink(student))}" target="_blank" class="py-2.5 bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-xs rounded-2xl flex items-center justify-center gap-1.5">
+                <span>💬 WhatsApp</span>
+              </a>
+              <button onclick="closeModal(); openAdmissionModal(${student.seatNumber}, '${student.id}')" class="py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-2xl">
+                Edit Details
+              </button>
+            </div>
+
+            <button onclick="vacateSeat('${student.id}')" class="w-full py-1 text-[11px] font-bold text-rose-600">
+              Vacate Seat
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Vacate = student leaves. The record stays saved (hidden), receipts and history are kept.
+    function vacateSeat(studentId) {
+      if (confirm('Are you sure you want to vacate this seat?')) {
+        const s = state.students.find(x => x.id === studentId);
+        if (s) {
+          s.status = 'inactive';
+          s.vacatedDate = getTodayString();
+        }
+        saveData();
+        closeModal();
+        showToast('Seat vacated successfully.');
+        renderCurrentTab();
+      }
+    }
+
+    // New students get the default fee of the chosen shift
+    function onAdmShiftChange() {
+      const sel = document.getElementById('adm-shift');
+      const sh = state.shifts.find(s => s.id === (sel && sel.value));
+      const feeEl = document.getElementById('adm-fee');
+      if (sh && feeEl && sh.defaultFee > 0) feeEl.value = sh.defaultFee;
+    }
+
+    // Admission & Edit Modal
+    function openAdmissionModal(prefilledSeat = null, editStudentId = null) {
+      const branch = getActiveBranch();
+      const bSeats = [...getBranchSeats(branch.id)].sort((a, b) => a.seatNumber - b.seatNumber);
+      const shifts = state.shifts;
+
+      const container = document.getElementById('modal-container');
+      const today = getTodayString();
+      const nextDue = addOneMonth(today);
+
+      let existing = null;
+      if (editStudentId) {
+        existing = state.students.find(s => s.id === editStudentId) || null;
+      }
+
+      // Which desk is pre-selected: the student's desk, the tapped desk, or the first free desk
+      let seatSel = null;
+      if (existing) seatSel = existing.seatNumber;
+      else if (prefilledSeat !== null && prefilledSeat !== undefined) seatSel = prefilledSeat;
+      else {
+        const occ = new Set(activeStudents(branch.id).map(s => s.seatNumber));
+        const free = bSeats.find(s => !occ.has(s.seatNumber));
+        seatSel = free ? free.seatNumber : (bSeats[0] ? bSeats[0].seatNumber : null);
+      }
+
+      const defaultFee = existing ? existing.monthlyFee : ((shifts[0] && shifts[0].defaultFee) || 1000);
+
+      container.innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
+          <div class="w-full max-w-sm bg-white rounded-3xl p-5 space-y-3 max-h-[90vh] overflow-y-auto no-scrollbar">
+            <div class="flex justify-between items-center border-b pb-2">
+              <h3 class="text-base font-black text-slate-900">${existing ? 'Edit Student Details' : 'New Student Admission'}</h3>
+              <button onclick="closeModal()" class="text-slate-400 font-bold text-lg">✕</button>
+            </div>
+
+            <form onsubmit="handleAdmissionSubmit(event, '${existing ? existing.id : ''}')" class="space-y-2.5 text-xs">
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="font-bold text-slate-700 block mb-0.5">Seat / Desk</label>
+                  <select id="adm-seat" class="w-full px-3 py-2 border rounded-xl font-bold bg-white">
+                    ${bSeats.map(s => `
+                      <option value="${s.seatNumber}" ${seatSel === s.seatNumber ? 'selected' : ''}>
+                        ${esc(s.label || 'Seat ' + s.seatNumber)}
+                      </option>
+                    `).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="font-bold text-slate-700 block mb-0.5">Shift</label>
+                  <select id="adm-shift" ${existing ? '' : 'onchange="onAdmShiftChange()"'} class="w-full px-3 py-2 border rounded-xl font-bold bg-white">
+                    ${shifts.map(sh => `
+                      <option value="${sh.id}" ${existing && existing.shift === sh.id ? 'selected' : ''}>
+                        ${esc(sh.name)}
+                      </option>
+                    `).join('')}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label class="font-bold text-slate-700 block mb-0.5">Student Full Name</label>
+                <input type="text" id="adm-name" maxlength="80" value="${existing ? esc(existing.name) : ''}" placeholder="Rahul Kumar" class="w-full px-3 py-2 border rounded-xl font-semibold" required />
+              </div>
+
+              <div>
+                <label class="font-bold text-slate-700 block mb-0.5">Mobile Number</label>
+                <input type="tel" id="adm-phone" maxlength="15" value="${existing ? esc(existing.phone) : ''}" placeholder="9876543210" class="w-full px-3 py-2 border rounded-xl font-semibold" required />
+              </div>
+
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="font-bold text-slate-700 block mb-0.5">Monthly Fees (₹)</label>
+                  <input type="number" id="adm-fee" min="0" value="${esc(defaultFee)}" step="50" class="w-full px-3 py-2 border rounded-xl font-bold text-emerald-800" required />
+                </div>
+                <div>
+                  <label class="font-bold text-slate-700 block mb-0.5">Next Due Date</label>
+                  <input type="date" id="adm-due" value="${esc(existing ? existing.nextDueDate : nextDue)}" class="w-full px-3 py-2 border rounded-xl font-semibold" required />
+                </div>
+              </div>
+
+              <button type="submit" class="w-full py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs shadow-md mt-2">
+                ${existing ? 'Save Student Updates' : 'Confirm Admission'}
+              </button>
+            </form>
+          </div>
+        </div>
+      `;
+    }
+
+    function handleAdmissionSubmit(e, editStudentId) {
+      e.preventDefault();
+      const branch = getActiveBranch();
+      const seatNum = parseInt(document.getElementById('adm-seat').value, 10);
+      const shift = document.getElementById('adm-shift').value;
+      const name = document.getElementById('adm-name').value.trim();
+      const phone = normalizePhone(document.getElementById('adm-phone').value);
+      const fee = Math.round(Number(document.getElementById('adm-fee').value));
+      const due = document.getElementById('adm-due').value;
+
+      if (!isFinite(seatNum)) { alert('Please add at least one desk on the Seat Map first.'); return; }
+      if (!name) { alert('Please enter the student name.'); return; }
+      if (!phone) { alert('Please enter a valid 10-digit mobile number.'); return; }
+      if (!isFinite(fee) || fee < 0) { alert('Please enter a valid monthly fee.'); return; }
+      if (!isDateStr(due)) { alert('Please choose a valid due date.'); return; }
+
+      // Strict Seat Availability Validation
+      const check = validateSeatAvailability(branch.id, seatNum, shift, editStudentId || null);
+      if (!check.available) {
+        alert(check.message);
+        return;
+      }
+
+      if (editStudentId) {
+        const student = state.students.find(s => s.id === editStudentId);
+        if (student) {
+          if (student.nextDueDate !== due) student.anchorDay = parseInt(due.slice(8, 10), 10);
+          student.seatNumber = seatNum;
+          student.shift = shift;
+          student.name = name;
+          student.phone = phone;
+          student.monthlyFee = fee;
+          student.nextDueDate = due;
+          saveData();
+          closeModal();
+          showToast(`Student ${name} updated successfully!`);
+          renderCurrentTab();
+        }
+      } else {
+        const today = getTodayString();
+        const newStudent = {
+          id: `s_${Date.now()}`,
+          branchId: branch.id,
+          seatNumber: seatNum,
+          shift,
+          name,
+          phone,
+          monthlyFee: fee,
+          admissionDate: today,
+          nextDueDate: due,
+          anchorDay: parseInt(due.slice(8, 10), 10),
+          status: 'active'
+        };
+        state.students.unshift(newStudent);
+        saveData();
+        closeModal();
+        showToast(`Student ${name} admitted on ${lab(branch.id, seatNum)}!`);
+        renderCurrentTab();
+      }
+    }
+
+    // TAB 2: STUDENTS DIRECTORY
+    function renderStudentsView() {
+      const branch = getActiveBranch();
+      const branchStudents = activeStudents(branch.id);
+      const bSeats = getBranchSeats(branch.id);
+
+      return `
+        <div class="flex items-center justify-between px-1">
+          <div>
+            <h2 class="text-2xl font-black text-slate-900">Students</h2>
+            <p class="text-xs text-slate-500 font-medium">${branchStudents.length} Profiles</p>
+          </div>
+          <button onclick="openAdmissionModal()" class="px-3 py-1.5 bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs">
+            + New Member
+          </button>
+        </div>
+
+        ${branchStudents.length === 0 ? `
+          <div class="bg-white rounded-3xl border border-slate-200 p-8 text-center text-xs text-slate-400 font-medium shadow-xs">
+            No students yet. Tap "+ New Member" to add your first student.
+          </div>
+        ` : ''}
+
+        <div class="space-y-2.5">
+          ${branchStudents.map(s => {
+            const status = getStudentStatus(s);
+            const days = getDaysRemaining(s.nextDueDate);
+            const sSeat = bSeats.find(st => st.seatNumber === s.seatNumber);
+            const seatLabel = sSeat ? sSeat.label : ('S-' + s.seatNumber);
+
+            return `
+              <div class="bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-xs space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl ${status === 'paid' ? 'bg-emerald-600 text-white' : (status === 'due_soon' ? 'bg-amber-400 text-amber-950' : 'bg-rose-500 text-white')} font-black text-xs flex items-center justify-center p-1 text-center">
+                      ${esc(seatLabel)}
+                    </div>
+                    <div>
+                      <h4 class="text-sm font-black text-slate-900">${esc(s.name)}</h4>
+                      <p class="text-xs text-slate-500 font-semibold">${esc(s.phone)}</p>
+                    </div>
+                  </div>
+
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${status === 'paid' ? 'bg-emerald-50 text-emerald-800' : (status === 'due_soon' ? 'bg-amber-50 text-amber-900' : 'bg-rose-50 text-rose-800')}">
+                    ${status === 'paid' ? 'Paid' : (status === 'due_soon' ? `${days}d Due` : `${Math.abs(days)}d Overdue`)}
+                  </span>
+                </div>
+
+                <div class="flex items-center justify-between text-xs text-slate-600 pt-1 border-t border-slate-100">
+                  <span>${esc(getShiftDisplayText(s.shift))}</span>
+                  <span class="font-bold text-slate-900">₹${esc(s.monthlyFee)}/month</span>
+                </div>
+
+                <!-- Action Row (Call, WhatsApp, Edit Student Details, Fees Received) -->
+                <div class="grid grid-cols-4 gap-1.5 pt-1">
+                  <a href="tel:${esc(s.phone)}" class="py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl text-center">
+                    Call
+                  </a>
+                  <a href="${esc(getWhatsAppReminderLink(s))}" target="_blank" class="py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl text-center">
+                    WhatsApp
+                  </a>
+                  <button onclick="openAdmissionModal(${s.seatNumber}, '${s.id}')" class="py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl">
+                    Edit
+                  </button>
+                  <button onclick="collectFee('${s.id}')" class="py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl">
+                    Fees Received
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    // TAB 4: PAYMENTS PASSBOOK (Bank Ledger Style)
+    function renderPaymentsView() {
+      const branch = getActiveBranch();
+      let branchPayments = state.payments.filter(p => p.branchId === branch.id);
+      const totalCollected = branchPayments.reduce((a, b) => a + b.amount, 0);
+
+      branchPayments.sort((a, b) => {
+        return paymentSortOrder === 'latest'
+          ? (b.paymentDate || '').localeCompare(a.paymentDate || '')
+          : (a.paymentDate || '').localeCompare(b.paymentDate || '');
+      });
+
+      return `
+        <div class="flex items-center justify-between px-1">
+          <div>
+            <h2 class="text-2xl font-black text-slate-900">Passbook</h2>
+            <p class="text-xs text-slate-500 font-medium">Receipts &amp; Fee Ledger</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="togglePaymentSort()" class="px-2.5 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-xl shadow-xs">
+              Sort: ${paymentSortOrder === 'latest' ? 'Newest' : 'Oldest'}
+            </button>
+            <button onclick="printPassbook()" class="px-3 py-1.5 bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs">
+              Print
+            </button>
+          </div>
+        </div>
+
+        <!-- Total Credit Balance Card -->
+        <div class="bg-gradient-to-r from-emerald-700 to-teal-800 text-white rounded-3xl p-4 shadow-md flex items-center justify-between">
+          <div>
+            <span class="text-[10px] font-bold text-emerald-200 uppercase tracking-wider">Total Received (Credit)</span>
+            <div class="text-2xl font-black tabular-nums">₹${money(totalCollected)}</div>
+          </div>
+          <span class="text-xs font-bold bg-white/20 px-3 py-1 rounded-xl">
+            ${branchPayments.length} Receipts
+          </span>
+        </div>
+
+        <!-- Passbook Ledger Table -->
+        <div class="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+          <div class="bg-slate-100/80 px-3.5 py-2.5 border-b border-slate-200 flex justify-between text-[10px] font-extrabold text-slate-600 uppercase tracking-wider">
+            <span>Student &amp; Details</span>
+            <span>Credit (₹)</span>
+          </div>
+
+          <div class="divide-y divide-slate-100">
+            ${branchPayments.length > 0 ? branchPayments.map(p => `
+              <div class="p-3.5 flex items-center justify-between hover:bg-slate-50">
+                <div>
+                  <div class="text-xs font-black text-slate-900">${esc(p.studentName)}</div>
+                  <div class="text-[11px] text-slate-500 font-medium">${esc(lab(p.branchId, p.seatNumber))} • ${esc(p.invoiceNumber)}</div>
+                  <div class="text-[10px] text-slate-400 font-semibold">${esc(p.paymentDate)} • via ${esc(p.paymentMode || 'cash')}</div>
+                </div>
+                <div class="text-right">
+                  <div class="text-sm font-black text-emerald-700 tabular-nums">+₹${esc(p.amount)}</div>
+                  <span class="text-[9px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded">RECEIVED</span>
+                </div>
+              </div>
+            `).join('') : `
+              <div class="p-8 text-center text-xs text-slate-400 font-medium">
+                No fee records found in this branch yet.
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+    }
+
+    function togglePaymentSort() {
+      paymentSortOrder = paymentSortOrder === 'latest' ? 'oldest' : 'latest';
+      renderCurrentTab();
+    }
+
+    function printPassbook() {
+      const branch = getActiveBranch();
+      const branchPayments = state.payments.filter(p => p.branchId === branch.id);
+      const totalCollected = branchPayments.reduce((a, b) => a + b.amount, 0);
+
+      const printable = document.getElementById('printable-passbook');
+      printable.innerHTML = `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2 style="margin: 0; font-size: 20px;">${esc(state.profile.libraryName || 'Library')}</h2>
+          <p style="margin: 2px 0 15px 0; font-size: 12px; color: #666;">Fee Passbook Report — ${esc(branch.name)} — Printed on: ${getTodayString()}</p>
+          <hr />
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 15px;">
+            <thead>
+              <tr style="background: #f1f5f9; text-align: left;">
+                <th style="padding: 8px; border: 1px solid #cbd5e1;">Date</th>
+                <th style="padding: 8px; border: 1px solid #cbd5e1;">Receipt #</th>
+                <th style="padding: 8px; border: 1px solid #cbd5e1;">Student</th>
+                <th style="padding: 8px; border: 1px solid #cbd5e1;">Seat</th>
+                <th style="padding: 8px; border: 1px solid #cbd5e1;">Mode</th>
+                <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${branchPayments.map(p => `
+                <tr>
+                  <td style="padding: 8px; border: 1px solid #e2e8f0;">${esc(p.paymentDate)}</td>
+                  <td style="padding: 8px; border: 1px solid #e2e8f0;">${esc(p.invoiceNumber)}</td>
+                  <td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold;">${esc(p.studentName)}</td>
+                  <td style="padding: 8px; border: 1px solid #e2e8f0;">${esc(lab(p.branchId, p.seatNumber))}</td>
+                  <td style="padding: 8px; border: 1px solid #e2e8f0;">${esc(p.paymentMode)}</td>
+                  <td style="padding: 8px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold;">₹${esc(p.amount)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr style="background: #f8fafc; font-weight: bold;">
+                <td colspan="5" style="padding: 8px; border: 1px solid #cbd5e1; text-align: right;">Total Amount Received:</td>
+                <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: right; color: #047857;">₹${esc(totalCollected)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      `;
+      window.print();
+    }
+
+    // TAB 5: SETTINGS (Owner Profile, Branches, Backup)
+    function renderSettingsView() {
+      return `
+        <div class="px-1">
+          <h2 class="text-2xl font-black text-slate-900">Settings</h2>
+          <p class="text-xs text-slate-500 font-medium">Owner Profile &amp; App Management</p>
+        </div>
+
+        <!-- Owner Profile Edit Form -->
+        <div class="bg-white rounded-3xl p-4 border border-slate-200 space-y-3 shadow-xs">
+          <h4 class="text-sm font-bold text-slate-900">Owner Profile Information</h4>
+          <form onsubmit="handleSaveProfile(event)" class="space-y-2 text-xs">
+            <div>
+              <label class="font-bold text-slate-700 block mb-0.5">Owner Full Name</label>
+              <input type="text" id="prof-name" maxlength="80" value="${esc(state.profile.name || '')}" class="w-full px-3 py-2 border rounded-xl font-semibold" required />
+            </div>
+            <div>
+              <label class="font-bold text-slate-700 block mb-0.5">Library Brand Name</label>
+              <input type="text" id="prof-lib" maxlength="80" value="${esc(state.profile.libraryName || '')}" class="w-full px-3 py-2 border rounded-xl font-semibold" required />
+            </div>
+            <div>
+              <label class="font-bold text-slate-700 block mb-0.5">Library Address / Landmark</label>
+              <input type="text" id="prof-addr" maxlength="160" value="${esc(state.profile.address || '')}" class="w-full px-3 py-2 border rounded-xl font-semibold" />
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="font-bold text-slate-700 block mb-0.5">Mobile Number</label>
+                <input type="tel" id="prof-phone" maxlength="20" value="${esc(state.profile.phone || '')}" class="w-full px-3 py-2 border rounded-xl font-semibold" required />
+              </div>
+              <div>
+                <label class="font-bold text-slate-700 block mb-0.5">UPI ID for Fees</label>
+                <input type="text" id="prof-upi" maxlength="60" value="${esc(state.profile.upiId || '')}" class="w-full px-3 py-2 border rounded-xl font-semibold" />
+              </div>
+            </div>
+            <button type="submit" class="w-full py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-xs mt-1">
+              Save Profile Details
+            </button>
+          </form>
+        </div>
+
+        <!-- Multi-Branch Management -->
+        <div class="bg-white rounded-3xl p-4 border border-slate-200 space-y-2 shadow-xs">
+          <div class="flex justify-between items-center">
+            <h4 class="text-sm font-bold text-slate-900">Manage Branches</h4>
+            <button onclick="promptAddBranch()" class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl">
+              + Add Branch
+            </button>
+          </div>
+          <div class="space-y-1.5 pt-1 text-xs">
+            ${state.branches.map(b => `
+              <div class="flex justify-between items-center p-2 rounded-xl ${b.id === state.activeBranchId ? 'bg-emerald-50 text-emerald-900 font-bold border border-emerald-200' : 'bg-slate-50 text-slate-700'}">
+                <span>${esc(b.name)} (${state.seats.filter(s => s.branchId === b.id).length || b.totalSeats} seats)</span>
+                ${b.id === state.activeBranchId ? '<span class="text-emerald-700 text-[10px] font-bold">Active</span>' : `<button onclick="switchBranch('${b.id}')" class="text-slate-500 font-semibold underline">Select</button>`}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Backup & Restore -->
+        <div class="bg-white rounded-3xl p-4 border border-slate-200 space-y-3 shadow-xs">
+          <h4 class="text-sm font-bold text-slate-900">Offline Data Backup</h4>
+          <p class="text-xs text-slate-500 font-medium">Download backup file to keep your library records safe or transfer to another phone.</p>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="downloadBackup()" class="py-2.5 bg-slate-900 text-white rounded-xl font-bold text-xs">
+              Download JSON
+            </button>
+            <label class="py-2.5 bg-white border border-slate-300 text-slate-800 rounded-xl font-bold text-xs text-center cursor-pointer">
+              Restore JSON
+              <input type="file" accept=".json,application/json" onchange="restoreBackup(event)" class="hidden" />
+            </label>
+          </div>
+        </div>
+      `;
+    }
+
+    function handleSaveProfile(e) {
+      e.preventDefault();
+      state.profile.name = document.getElementById('prof-name').value.trim();
+      state.profile.libraryName = document.getElementById('prof-lib').value.trim();
+      state.profile.address = document.getElementById('prof-addr').value.trim();
+      state.profile.phone = document.getElementById('prof-phone').value.trim();
+      state.profile.upiId = document.getElementById('prof-upi').value.trim();
+      saveData();
+      showToast('Profile updated successfully!');
+      renderCurrentTab();
+    }
+
+    // ==========================================
+    // BROADCAST NOTICE (admin only)
+    // The notice is read from notice.json in the GitHub repo. Owners cannot edit it.
+    // To send a new notice: edit notice.json on GitHub, change "id", set "enabled": true.
+    // ==========================================
+    function openNoticeModal(notice, noticeId) {
+      currentNoticeId = noticeId;
+      const container = document.getElementById('modal-container');
+      const message = esc(notice.message || '').replace(/\n/g, '<br>');
+      container.innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in">
+          <div class="w-full max-w-sm bg-white rounded-3xl p-6 space-y-4 shadow-2xl text-center border border-slate-100">
+            <div class="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-inner">
+              📢
+            </div>
+            <div class="space-y-1">
+              <span class="text-[10px] font-extrabold uppercase tracking-widest text-amber-700 bg-amber-100/70 px-2.5 py-0.5 rounded-full">
+                Notice Announcement
+              </span>
+              <h3 class="text-lg font-black text-slate-900 pt-1">${esc(notice.title)}</h3>
+            </div>
+            <p class="text-xs text-slate-600 font-medium leading-relaxed bg-slate-50 p-3.5 rounded-2xl border border-slate-100 text-left">
+              ${message}
+            </p>
+            <button onclick="dismissNoticePopup()" class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95">
+              I Understand &amp; Close
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function dismissNoticePopup() {
+      try { localStorage.setItem(NOTICE_SEEN_KEY, currentNoticeId); } catch (_) { }
+      closeModal();
+    }
+
+    async function loadRemoteNotice() {
+      try {
+        const sep = NOTICE_URL.includes('?') ? '&' : '?';
+        const r = await fetch(NOTICE_URL + sep + 't=' + Date.now(), { cache: 'no-store' });
+        if (!r.ok) return;
+        const n = await r.json();
+        if (!n || n.enabled !== true || !n.title) return;
+        const id = String(n.id || (n.title + '|' + (n.message || '')));
+        let seen = '';
+        try { seen = localStorage.getItem(NOTICE_SEEN_KEY) || ''; } catch (_) { }
+        if (seen === id) return;            // already shown once on this phone
+        if (isModalOpen()) return;          // do not interrupt the owner; it will show next time
+        openNoticeModal({ title: String(n.title).slice(0, 120), message: String(n.message || '').slice(0, 1200) }, id);
+      } catch (e) { /* offline: no notice */ }
+    }
+
+    function promptAddBranch() {
+      const name = (prompt('Enter new branch name:') || '').trim().slice(0, 60);
+      if (!name) return;
+      const seatsInput = prompt('Total seats:', '24');
+      if (seatsInput === null) return;
+      const seats = Math.max(1, Math.min(300, parseInt(seatsInput, 10) || 24));
+      const newId = `branch_${Date.now()}`;
+      state.branches.push({ id: newId, name, totalSeats: seats, gridCols: 6, seatsInit: false });
+      state.activeBranchId = newId;
+      saveData();
+      renderCurrentTab();
+      showToast(`Branch "${name}" created!`);
+    }
+
+    function downloadBackup() {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `library_map_backup_${getTodayString()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      showToast('Backup file downloaded');
+    }
+
+    function restoreBackup(e) {
+      const input = e.target;
+      const file = input.files && input.files[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Backup file is too large.');
+        input.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const parsed = JSON.parse(evt.target.result);
+          if (!parsed || !Array.isArray(parsed.branches) || !Array.isArray(parsed.students)) throw new Error('bad file');
+          if (!confirm('Restoring this backup will replace ALL current data on this phone. Continue?')) return;
+          state = normalizeState(parsed);
+          saveData();
+          renderCurrentTab();
+          showToast('Backup restored successfully!');
+        } catch (err) {
+          alert('Invalid backup file!');
+        } finally {
+          input.value = '';
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function renderCurrentTab() {
+      const app = document.getElementById('app-content');
+      if (currentTab === 'home') app.innerHTML = renderHomeView();
+      else if (currentTab === 'seats') app.innerHTML = renderSeatsView();
+      else if (currentTab === 'students') app.innerHTML = renderStudentsView();
+      else if (currentTab === 'payments') app.innerHTML = renderPaymentsView();
+      else if (currentTab === 'settings') app.innerHTML = renderSettingsView();
+    }
+
+    // Android Back button: closes popups first, then goes to Home, then asks to press again to exit
+    function initBackHandling() {
+      try {
+        history.replaceState({ base: 1 }, '');
+        history.pushState({ guard: 1 }, '');
+      } catch (e) { return; }
+      window.addEventListener('popstate', () => {
+        if (isModalOpen()) {
+          closeModal();
+          history.pushState({ guard: 1 }, '');
+        } else if (currentTab !== 'home') {
+          navigateTab('home');
+          history.pushState({ guard: 1 }, '');
+        } else if (!exitArmed) {
+          exitArmed = true;
+          showToast('Press back again to exit');
+          history.pushState({ guard: 1 }, '');
+          setTimeout(() => { exitArmed = false; }, 2000);
+        } else {
+          history.back();
+        }
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      updateHeader();
+      renderCurrentTab();
+      initBackHandling();
+      setTimeout(loadRemoteNotice, 600);
+      // Ask the browser not to delete this app's data when the phone is low on storage
+      try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (_) { }
+    });
+
+    // Offline support
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => { });
+      });
+    }
+  </script>
+</body>
+</html>
