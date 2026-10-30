@@ -113,6 +113,8 @@
     // Broadcast notice file. Only the admin (you) edits notice.json on GitHub; owners cannot edit it.
     const NOTICE_URL = 'notice.json';
     const NOTICE_SEEN_KEY = 'library_map_notice_seen';
+    const APP_VERSION = '1.0.0';
+    const SUPPORT_EMAIL = 'apps.mishraji@gmail.com';
 
     let currentTab = 'home';
     let seatShiftFilter = 'all';
@@ -1920,9 +1922,13 @@
           </div>
           <div class="space-y-1.5 pt-1 text-xs">
             ${state.branches.map(b => `
-              <div class="flex justify-between items-center p-2 rounded-xl ${b.id === state.activeBranchId ? 'bg-emerald-50 text-emerald-900 font-bold border border-emerald-200' : 'bg-slate-50 text-slate-700'}">
-                <span>${esc(b.name)} (${state.seats.filter(s => s.branchId === b.id).length || b.totalSeats} seats)</span>
-                ${b.id === state.activeBranchId ? '<span class="text-emerald-700 text-[10px] font-bold">Active</span>' : `<button onclick="switchBranch('${b.id}')" class="text-slate-500 font-semibold underline">Select</button>`}
+              <div class="flex justify-between items-center gap-2 p-2 rounded-xl ${b.id === state.activeBranchId ? 'bg-emerald-50 text-emerald-900 font-bold border border-emerald-200' : 'bg-slate-50 text-slate-700'}">
+                <span class="min-w-0 truncate">${esc(b.name)} (${state.seats.filter(s => s.branchId === b.id).length || b.totalSeats} seats)</span>
+                <span class="flex items-center gap-2.5 shrink-0">
+                  <button onclick="renameBranch('${b.id}')" class="text-slate-500 text-[11px] font-semibold underline">Rename</button>
+                  <button onclick="deleteBranch('${b.id}')" class="text-rose-600 text-[11px] font-semibold underline">Delete</button>
+                  ${b.id === state.activeBranchId ? '<span class="text-emerald-700 text-[10px] font-bold">Active</span>' : `<button onclick="switchBranch('${b.id}')" class="text-slate-500 font-semibold underline">Select</button>`}
+                </span>
               </div>
             `).join('')}
           </div>
@@ -1941,6 +1947,29 @@
               <input type="file" accept=".json,application/json" onchange="restoreBackup(event)" class="hidden" />
             </label>
           </div>
+        </div>
+
+        <!-- About & Help -->
+        <div class="bg-white rounded-3xl p-4 border border-slate-200 shadow-xs">
+          <h4 class="text-sm font-bold text-slate-900 mb-1">About &amp; Help</h4>
+          <div class="divide-y divide-slate-100 text-xs">
+            <button onclick="openInfoModal('about')" class="w-full flex items-center justify-between py-3 font-bold text-slate-800">
+              <span>ℹ️&nbsp; About Library Map</span><span class="text-slate-400">›</span>
+            </button>
+            <button onclick="openInfoModal('howto')" class="w-full flex items-center justify-between py-3 font-bold text-slate-800">
+              <span>📖&nbsp; How to Use</span><span class="text-slate-400">›</span>
+            </button>
+            <button onclick="openInfoModal('contact')" class="w-full flex items-center justify-between py-3 font-bold text-slate-800">
+              <span>✉️&nbsp; Contact Us</span><span class="text-slate-400">›</span>
+            </button>
+            <button onclick="openInfoModal('privacy')" class="w-full flex items-center justify-between py-3 font-bold text-slate-800">
+              <span>🔒&nbsp; Privacy Policy</span><span class="text-slate-400">›</span>
+            </button>
+            <button onclick="openInfoModal('terms')" class="w-full flex items-center justify-between py-3 font-bold text-slate-800">
+              <span>📄&nbsp; Terms &amp; Disclaimer</span><span class="text-slate-400">›</span>
+            </button>
+          </div>
+          <p class="text-[10px] text-slate-400 font-medium text-center pt-2">Library Map v${APP_VERSION} • Free app</p>
         </div>
       `;
     }
@@ -2022,6 +2051,107 @@
       saveData();
       renderCurrentTab();
       showToast(`Branch "${name}" created!`);
+    }
+
+    // ==========================================
+    // About & Help pages (read inside the app)
+    // ==========================================
+    function openInfoModal(page) {
+      const p = (t) => `<p>${t}</p>`;
+      const li = (items) => `<ul class="list-disc pl-4 space-y-1">${items.map(i => `<li>${i}</li>`).join('')}</ul>`;
+      let title = '';
+      let body = '';
+
+      if (page === 'about') {
+        title = 'About Library Map';
+        body = p('<strong>Library Map</strong> is a free app for study-library owners. Design your real room map, admit students, track monthly fee dues and send WhatsApp reminders and receipts.') +
+          li(['Visual seat map with your real desk numbers', 'Shift-wise seats and fees', 'Fee passbook with printable receipts', 'Works offline after the first open', 'Your data stays on your own phone']) +
+          p(`Version ${APP_VERSION}<br>Developed by Parth Sharma`);
+      } else if (page === 'howto') {
+        title = 'How to Use';
+        body = li([
+          '<strong>Settings:</strong> fill your name, library name, address and mobile number first.',
+          '<strong>Seat Map → Shifts:</strong> set your shift timings and default fees.',
+          '<strong>Seat Map → Map Edit:</strong> tap empty space to add a desk, drag to move it, tap a desk to give it your real number. Press Lock Map when done.',
+          '<strong>Home → Add Student:</strong> choose desk, shift, enter name, mobile and fee.',
+          '<strong>Fees Received:</strong> adds one month to the due date and creates a receipt you can send on WhatsApp.',
+          '<strong>Colours:</strong> green = paid, yellow = due in 3 days, red = overdue, grey = vacant.',
+          '<strong>Backup:</strong> Settings → Download JSON regularly. Use Restore JSON on a new phone.'
+        ]);
+      } else if (page === 'contact') {
+        title = 'Contact Us';
+        body = p('Questions, suggestions or a problem in the app? Write to us:') +
+          `<a href="mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Library Map support')}" class="block w-full py-2.5 bg-emerald-600 text-white font-bold text-xs rounded-xl text-center">✉️ ${SUPPORT_EMAIL}</a>` +
+          p('When reporting a problem, please tell us your phone model and what you were doing.');
+      } else if (page === 'privacy') {
+        title = 'Privacy Policy';
+        body = li([
+          'Everything you enter (library details, students, fees) is stored <strong>only on your phone</strong>.',
+          'We do not collect, upload or sell your data. There is no login, no ads and no tracking.',
+          'WhatsApp and Call buttons just open WhatsApp or your dialer on your phone. Nothing is sent unless you press send.',
+          'Backup files are saved on your phone. Keep them safe.',
+          'You are responsible for your students\' personal details. Keep only what you need.',
+          'To delete all data, clear the app storage or uninstall the app.'
+        ]) +
+          `<a href="privacy.html" target="_blank" rel="noopener" class="block w-full py-2.5 bg-slate-100 text-slate-800 font-bold text-xs rounded-xl text-center">Read full Privacy Policy</a>`;
+      } else if (page === 'terms') {
+        title = 'Terms & Disclaimer';
+        body = li([
+          'Library Map is a free tool provided "as is", without any warranty.',
+          'You are responsible for the accuracy of the data you enter and for taking regular backups.',
+          'We are not responsible for lost data, for example if the phone is lost, reset or the app data is cleared.',
+          'Fee records and receipts made in the app are for your own record keeping. Check them yourself before relying on them for accounts or tax.',
+          'WhatsApp is a separate service by WhatsApp. Its own terms apply to messages you send.'
+        ]);
+      } else {
+        return;
+      }
+
+      document.getElementById('modal-container').innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
+          <div class="w-full max-w-sm bg-white rounded-3xl p-5 space-y-3 max-h-[85vh] overflow-y-auto no-scrollbar">
+            <div class="flex justify-between items-center border-b pb-2">
+              <h3 class="text-base font-black text-slate-900">${esc(title)}</h3>
+              <button onclick="closeModal()" class="text-slate-400 font-bold text-lg">✕</button>
+            </div>
+            <div class="text-xs text-slate-600 font-medium leading-relaxed space-y-3">${body}</div>
+            <button onclick="closeModal()" class="w-full py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl">Close</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renameBranch(branchId) {
+      const b = state.branches.find(x => x.id === branchId);
+      if (!b) return;
+      const name = (prompt('Enter new branch name:', b.name) || '').trim().slice(0, 60);
+      if (!name || name === b.name) return;
+      b.name = name;
+      saveData();
+      renderCurrentTab();
+      showToast(`Branch renamed to "${name}"`);
+    }
+
+    function deleteBranch(branchId) {
+      const b = state.branches.find(x => x.id === branchId);
+      if (!b) return;
+      if (state.branches.length <= 1) {
+        alert('You need at least one branch. Add another branch first, or use Rename for this one.');
+        return;
+      }
+      if (activeStudents(b.id).length) {
+        alert(`"${b.name}" still has active students. Vacate all of them first, then delete the branch.`);
+        return;
+      }
+      if (!confirm(`Delete branch "${b.name}"?\n\nThis also deletes its desks, old student records and fee receipts. Download a backup first if you may need them.`)) return;
+      state.branches = state.branches.filter(x => x.id !== b.id);
+      state.seats = state.seats.filter(x => x.branchId !== b.id);
+      state.students = state.students.filter(x => x.branchId !== b.id);
+      state.payments = state.payments.filter(x => x.branchId !== b.id);
+      if (state.activeBranchId === b.id) state.activeBranchId = state.branches[0].id;
+      saveData();
+      renderCurrentTab();
+      showToast(`Branch "${b.name}" deleted.`);
     }
 
     function downloadBackup() {
