@@ -2,7 +2,7 @@
    - App files: served from cache instantly, refreshed in the background (so updates arrive on the next open).
    - notice.json is NEVER cached, so a new broadcast notice always shows up.
    - Google Fonts are cached after the first online visit so the design stays identical offline. */
-const CACHE = 'library-map-v1';
+const CACHE = 'library-map-v2';
 const SHELL = ['./', './index.html', './css/app.css', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {

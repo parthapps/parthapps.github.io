@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Library Map — Self Study Library &amp; Seat Management</title>
   <meta name="description" content="Study Library seat map, student admissions, fees passbook, and WhatsApp reminders.">
   <!-- Compiled Tailwind CSS (same classes as before, no CDN needed) -->
@@ -12,11 +12,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
+    html, body {
+      overscroll-behavior: none;            /* no browser pull-to-refresh / bounce: feels like an app */
+      touch-action: pan-x pan-y;            /* no pinch-zoom / double-tap zoom */
+      -webkit-text-size-adjust: 100%;
+    }
     body {
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
-      touch-action: manipulation;
     }
     input, textarea { user-select: text; -webkit-user-select: text; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -224,25 +228,92 @@
     }
 
     // ==========================================
+    // Shared constants: app promo + library facilities
+    // ==========================================
+    const APP_SHARE_URL = 'https://parthapps.github.io/';
+    const APP_PROMO = `📲 Library Map — लाइब्रेरी मैनेजमेंट का फ्री ऐप: ${APP_SHARE_URL}`;
+
+    const FACILITIES = [
+      { id: 'ac', label: 'Air Conditioned (AC) Study Hall' },
+      { id: 'cooler', label: 'Cooler / Fan Cooled Hall' },
+      { id: 'wifi', label: 'High-Speed WiFi' },
+      { id: 'water', label: 'RO Cold Water' },
+      { id: 'power', label: 'Power Socket at every desk' },
+      { id: 'chair', label: 'Comfortable Study Chairs' },
+      { id: 'cctv', label: '24x7 CCTV Security' },
+      { id: 'wash', label: 'Clean Washrooms' },
+      { id: 'locker', label: 'Personal Lockers' },
+      { id: 'parking', label: 'Parking Space' },
+      { id: 'silent', label: 'Peaceful Silent Environment' },
+      { id: 'open24', label: 'Open Long Hours / 24x7' },
+      { id: 'tea', label: 'Tea / Coffee Available' },
+      { id: 'books', label: 'Newspapers & Reference Books' }
+    ];
+
+    // Ticked facilities + the owner's own typed ones (comma or new-line separated)
+    function getFacilitiesList() {
+      const p = state.profile || {};
+      const ticked = FACILITIES.filter(f => (p.facilities || []).includes(f.id)).map(f => f.label);
+      const extra = String(p.facilitiesExtra || '').split(/[,\n]+/).map(t => t.trim().slice(0, 40)).filter(Boolean);
+      return [...ticked, ...extra].slice(0, 20);
+    }
+
+    // ==========================================
     // Seats data
     // ==========================================
+    const DOT_SIZE = 44, ROW_PITCH = 54, CANVAS_MIN = 470;
+
+    // Tidy grid of 6 desks per row. Small rooms keep the classic spacing; big rooms
+    // get a taller canvas so no desk ever sits on top of another.
+    function gridLayout(total) {
+      const rows = Math.max(1, Math.ceil(total / 6));
+      let H = CANVAS_MIN;
+      const pts = [];
+      if (rows <= 7) {
+        const step = rows > 1 ? Math.min(19, 70 / (rows - 1)) : 0;
+        for (let i = 0; i < total; i++) {
+          pts.push({ x: Math.round(12 + (i % 6) * 15.5), y: Math.round(18 + Math.floor(i / 6) * step) });
+        }
+      } else {
+        H = Math.max(CANVAS_MIN, 70 + (rows - 1) * ROW_PITCH + 70);
+        for (let i = 0; i < total; i++) {
+          pts.push({ x: Math.round(12 + (i % 6) * 15.5), y: Math.round((70 + Math.floor(i / 6) * ROW_PITCH) / H * 1000) / 10 });
+        }
+      }
+      return { H, pts };
+    }
+
     function generateSeats(branchId, total) {
+      const lay = gridLayout(total);
       const list = [];
-      const rows = Math.ceil(total / 6);
-      const step = rows > 1 ? Math.min(19, 70 / (rows - 1)) : 0;
       for (let i = 1; i <= total; i++) {
-        const r = Math.floor((i - 1) / 6), c = (i - 1) % 6;
         list.push({
           id: `seat_${branchId}_${i}`,
           branchId,
           seatNumber: i,
           label: `S-${i < 10 ? '0' + i : i}`,
-          x: Math.round(12 + c * 15.5),
-          y: Math.round(18 + r * step),
+          x: lay.pts[i - 1].x,
+          y: lay.pts[i - 1].y,
           isAisle: false
         });
       }
+      list.canvasH = lay.H;
       return list;
+    }
+
+    function getCanvasH(branch) {
+      return Math.max(CANVAS_MIN, Math.round(Number((branch || {}).canvasH)) || CANVAS_MIN);
+    }
+
+    // Change canvas height but keep every desk at the same pixel position
+    function setCanvasH(branch, newH) {
+      const oldH = getCanvasH(branch);
+      newH = Math.min(8000, Math.max(CANVAS_MIN, Math.round(newH)));
+      if (newH === oldH) return;
+      state.seats.forEach(sd => {
+        if (sd.branchId === branch.id && typeof sd.y === 'number') sd.y = Math.round(sd.y * oldH / newH * 10) / 10;
+      });
+      branch.canvasH = newH;
     }
 
     // Seats of a branch. Auto-generated only once per branch (so "Clear All" really stays cleared).
@@ -252,18 +323,23 @@
       let list = state.seats.filter(s => s.branchId === branchId);
       if (!list.length && !branch.seatsInit) {
         list = generateSeats(branchId, branch.totalSeats || 24);
+        branch.canvasH = list.canvasH;
         state.seats = [...state.seats, ...list];
         branch.seatsInit = true;
         saveData();
       } else if (!branch.seatsInit) {
         branch.seatsInit = true;
       }
-      list.forEach((s, i) => {
-        if (typeof s.x !== 'number' || typeof s.y !== 'number') {
-          s.x = Math.round(12 + (i % 6) * 15.5);
-          s.y = Math.min(88, Math.round(18 + Math.floor(i / 6) * 19));
-        }
-      });
+      if (list.some(s => typeof s.x !== 'number' || typeof s.y !== 'number')) {
+        const lay = gridLayout(list.length);
+        if (lay.H > getCanvasH(branch)) branch.canvasH = lay.H;
+        list.forEach((s, i) => {
+          if (typeof s.x !== 'number' || typeof s.y !== 'number') {
+            s.x = lay.pts[i].x;
+            s.y = Math.round(lay.pts[i].y * lay.H / getCanvasH(branch) * 10) / 10;
+          }
+        });
+      }
       return list;
     }
 
@@ -308,10 +384,12 @@
           email: '',
           libraryName: 'Self Study Library',
           address: '',
-          upiId: ''
+          upiId: '',
+          facilities: [],
+          facilitiesExtra: ''
         },
         branches: [
-          { id: branchId, name: 'Main Branch', totalSeats: 24, gridCols: 6, seatsInit: true }
+          { id: branchId, name: 'Main Branch', totalSeats: 24, gridCols: 6, seatsInit: true, canvasH: 470 }
         ],
         activeBranchId: branchId,
         shifts: DEFAULT_SHIFTS.map(s => ({ ...s })),
@@ -334,7 +412,9 @@
         email: String(p.email || '').slice(0, 80),
         libraryName: String(p.libraryName || 'Self Study Library').slice(0, 80),
         address: String(p.address || '').slice(0, 160),
-        upiId: String(p.upiId || '').slice(0, 60)
+        upiId: String(p.upiId || '').slice(0, 60),
+        facilities: (Array.isArray(p.facilities) ? p.facilities : []).filter(id => FACILITIES.some(f => f.id === id)),
+        facilitiesExtra: String(p.facilitiesExtra || '').slice(0, 300)
       };
 
       const branchIds = new Set();
@@ -349,7 +429,8 @@
             name: String(b.name || 'Branch ' + (i + 1)).slice(0, 60),
             totalSeats: Math.max(0, parseInt(b.totalSeats, 10) || 0),
             gridCols: 6,
-            seatsInit: !!b.seatsInit
+            seatsInit: !!b.seatsInit,
+            canvasH: Math.min(8000, Math.max(CANVAS_MIN, Math.round(Number(b.canvasH)) || CANVAS_MIN))
           };
         });
       if (!branches.length) {
@@ -802,12 +883,12 @@
               </div>
             </button>
 
-            <!-- Share Library on WhatsApp -->
+            <!-- Share Library (any app) -->
             <button onclick="openShareLibraryModal()" class="h-24 rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-700 text-white p-3 text-left flex flex-col justify-between shadow-xs active:scale-95 transition-transform">
               <span class="text-lg">📢</span>
               <div>
                 <div class="text-xs font-bold leading-tight">Share Library</div>
-                <div class="text-[9px] text-teal-100">Send on WhatsApp</div>
+                <div class="text-[9px] text-teal-100">Share on any app</div>
               </div>
             </button>
 
@@ -855,6 +936,16 @@
             </div>
           </div>
         ` : ''}
+
+        <!-- Daily Suvichar Board -->
+        <div class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-4 border border-amber-200 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-black uppercase tracking-wider text-amber-700">🌅 आज का सुविचार</span>
+            <button onclick="shareSuvichar()" class="text-[11px] font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-xl">Share</button>
+          </div>
+          <p class="text-sm font-bold text-slate-800 leading-relaxed">“${esc(getSuvichar().q)}”</p>
+          <p class="text-xs font-extrabold text-amber-700 text-right">— ${esc(getSuvichar().a)}</p>
+        </div>
       `;
     }
 
@@ -863,13 +954,16 @@
       const branch = getActiveBranch();
       const bSeats = getBranchSeats(branch.id);
       const vacant = Math.max(0, bSeats.length - occupiedCount(branch.id, bSeats));
+      const facs = getFacilitiesList();
+      const sv = getSuvichar();
+      const note = t => `<span class="text-[10px] font-semibold text-slate-400">${t}</span>`;
 
       const container = document.getElementById('modal-container');
       container.innerHTML = `
         <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
-          <div class="w-full max-w-sm bg-white rounded-3xl p-5 space-y-4">
+          <div class="w-full max-w-sm bg-white rounded-3xl p-5 space-y-4 max-h-[92vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b pb-2">
-              <h3 class="text-base font-black text-slate-900">Share Library on WhatsApp</h3>
+              <h3 class="text-base font-black text-slate-900">Share Library</h3>
               <button onclick="closeModal()" class="text-slate-400 font-bold text-lg">✕</button>
             </div>
 
@@ -886,62 +980,159 @@
                 <span class="font-bold text-slate-800">Available Seats: ${vacant} Vacant Desks</span>
               </label>
 
-              <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-xl cursor-pointer">
-                <input type="checkbox" id="sh-amenities" checked class="w-4 h-4 text-emerald-600 rounded">
-                <span class="font-bold text-slate-800">Amenities: AC, 5G WiFi, RO Cold Water, Ergonomic Chairs</span>
+              <label class="flex items-start gap-2 p-2 bg-slate-50 rounded-xl cursor-pointer">
+                <input type="checkbox" id="sh-amenities" ${facs.length ? 'checked' : 'disabled'} class="w-4 h-4 mt-0.5 text-emerald-600 rounded">
+                <span class="font-bold text-slate-800">${facs.length ? 'Facilities: ' + esc(facs.join(', ')) : 'Facilities ' + note('(add them in Settings → Library Facilities)')}</span>
               </label>
 
               <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-xl cursor-pointer">
-                <input type="checkbox" id="sh-address" checked class="w-4 h-4 text-emerald-600 rounded">
-                <span class="font-bold text-slate-800">Address: ${esc(state.profile.address || 'Near Main Market')}</span>
+                <input type="checkbox" id="sh-address" ${state.profile.address ? 'checked' : 'disabled'} class="w-4 h-4 text-emerald-600 rounded">
+                <span class="font-bold text-slate-800">${state.profile.address ? 'Address: ' + esc(state.profile.address) : 'Address ' + note('(add it in Settings)')}</span>
               </label>
 
               <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-xl cursor-pointer">
-                <input type="checkbox" id="sh-phone" checked class="w-4 h-4 text-emerald-600 rounded">
-                <span class="font-bold text-slate-800">Contact Number: ${esc(state.profile.phone)}</span>
+                <input type="checkbox" id="sh-phone" ${state.profile.phone ? 'checked' : 'disabled'} class="w-4 h-4 text-emerald-600 rounded">
+                <span class="font-bold text-slate-800">${state.profile.phone ? 'Contact Number: ' + esc(state.profile.phone) : 'Contact Number ' + note('(add it in Settings)')}</span>
+              </label>
+
+              <label class="flex items-start gap-2 p-2 bg-amber-50 rounded-xl cursor-pointer">
+                <input type="checkbox" id="sh-quote" checked class="w-4 h-4 mt-0.5 text-amber-600 rounded">
+                <span class="font-bold text-slate-800">Today's Suvichar: “${esc(sv.q)}” <span class="text-amber-700">— ${esc(sv.a)}</span></span>
               </label>
             </div>
 
-            <button onclick="sendLibraryShareWhatsApp()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-md">
-              <span>Send Message on WhatsApp</span>
+            <button onclick="shareLibrary()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-md">
+              <span>Share Now (WhatsApp, Instagram, SMS, any app)</span>
             </button>
           </div>
         </div>
       `;
     }
 
-    function sendLibraryShareWhatsApp() {
+    function shareLibrary() {
       const branch = getActiveBranch();
       const bSeats = getBranchSeats(branch.id);
       const vacant = Math.max(0, bSeats.length - occupiedCount(branch.id, bSeats));
+      const on = id => { const el = document.getElementById(id); return !!(el && el.checked && !el.disabled); };
+      const lib = state.profile.libraryName || 'Self Study Library';
 
-      let msg = `*📚 ${state.profile.libraryName || 'Self Study Library'}* 📚\n\n`;
-
-      if (document.getElementById('sh-seats').checked) {
+      let msg = on('sh-name') ? `*📚 ${lib}* 📚\n\n` : '';
+      if (on('sh-seats')) {
         msg += `🟢 *Seats Update:* ${vacant} Vacant Desks Available Now!\n\n`;
       }
-      if (document.getElementById('sh-amenities').checked) {
-        msg += `✨ *Facilities Provided:*\n• Air Conditioned (AC) Silent Study Hall\n• High-Speed 5G WiFi & Personal Power Sockets\n• Comfortable Ergonomic Study Chairs\n• RO Cold Water & Clean Washrooms\n• 24x7 CCTV Security & Biometric Access\n\n`;
+      if (on('sh-amenities')) {
+        msg += `✨ *Facilities Provided:*\n${getFacilitiesList().map(f => '• ' + f).join('\n')}\n\n`;
       }
-      if (document.getElementById('sh-address').checked) {
-        msg += `📍 *Location:* ${state.profile.address || 'Main Road'}\n`;
+      if (on('sh-address')) {
+        msg += `📍 *Location:* ${state.profile.address}\n`;
       }
-      if (document.getElementById('sh-phone').checked && state.profile.phone) {
+      if (on('sh-phone')) {
         msg += `📞 *Call / WhatsApp for Booking:* ${state.profile.phone}\n`;
       }
-
       msg += `\nReserve your peaceful study space today!`;
+      if (on('sh-quote')) {
+        const sv = getSuvichar();
+        msg += `\n\n🌅 *आज का सुविचार*\n“${sv.q}”\n— ${sv.a}`;
+      }
+      msg += `\n\n${APP_PROMO}`;
 
-      const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-      window.open(url, '_blank');
       closeModal();
+      shareText(msg);
+    }
+
+    // Opens the phone's share sheet (WhatsApp, Telegram, SMS, Instagram... every app on the phone).
+    // If the phone/browser has no share sheet, falls back to WhatsApp.
+    async function shareText(text) {
+      if (navigator.share) {
+        try {
+          await navigator.share({ text });
+          return true;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return false; // user closed the share sheet
+        }
+      }
+      window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+      return true;
+    }
+
+    // ==========================================
+    // Daily Suvichar (a different great thinker every day, works offline)
+    // ==========================================
+    const SUVICHAR_LIST = [
+      { q: "उठो, जागो और तब तक मत रुको जब तक लक्ष्य प्राप्त न हो जाए।", a: "स्वामी विवेकानंद" },
+      { q: "एक समय में एक काम करो, और ऐसा करते समय अपनी पूरी आत्मा उसमें डाल दो।", a: "स्वामी विवेकानंद" },
+      { q: "शिक्षा का अर्थ है उस पूर्णता को प्रकट करना, जो मनुष्य में पहले से विद्यमान है।", a: "स्वामी विवेकानंद" },
+      { q: "ब्रह्मांड की सारी शक्तियाँ पहले से हमारी हैं; हम ही आँखों पर हाथ रखकर रोते हैं कि कितना अँधेरा है।", a: "स्वामी विवेकानंद" },
+      { q: "जब तक जीना, तब तक सीखना; अनुभव ही जगत में सर्वोत्तम शिक्षक है।", a: "रामकृष्ण परमहंस" },
+      { q: "सपने वो नहीं जो हम सोते समय देखते हैं, सपने वो हैं जो हमें सोने नहीं देते।", a: "डॉ. ए.पी.जे. अब्दुल कलाम" },
+      { q: "सूरज की तरह चमकना है तो पहले सूरज की तरह जलना सीखो।", a: "डॉ. ए.पी.जे. अब्दुल कलाम" },
+      { q: "उत्कृष्टता एक निरंतर प्रक्रिया है, कोई संयोग नहीं।", a: "डॉ. ए.पी.जे. अब्दुल कलाम" },
+      { q: "कठिनाइयाँ हमें बर्बाद करने नहीं, हमारी छिपी क्षमताओं को बाहर लाने आती हैं।", a: "डॉ. ए.पी.जे. अब्दुल कलाम" },
+      { q: "ऐसे जियो जैसे कल मरना है, और ऐसे सीखो जैसे हमेशा जीना है।", a: "महात्मा गांधी" },
+      { q: "आपकी खुशी तब है जब आप जो सोचते, कहते और करते हैं, उनमें सामंजस्य हो।", a: "महात्मा गांधी" },
+      { q: "शक्ति शारीरिक क्षमता से नहीं, अदम्य इच्छाशक्ति से आती है।", a: "महात्मा गांधी" },
+      { q: "शिक्षित बनो, संगठित रहो, संघर्ष करो।", a: "डॉ. भीमराव अंबेडकर" },
+      { q: "बुद्धि का विकास मानव के अस्तित्व का अंतिम लक्ष्य होना चाहिए।", a: "डॉ. भीमराव अंबेडकर" },
+      { q: "काल करे सो आज कर, आज करे सो अब; पल में परलय होएगी, बहुरि करेगा कब।", a: "संत कबीर" },
+      { q: "धीरे-धीरे रे मना, धीरे सब कुछ होय; माली सींचे सौ घड़ा, ऋतु आए फल होय।", a: "संत कबीर" },
+      { q: "जिन खोजा तिन पाइयाँ, गहरे पानी पैठ; मैं बपुरा बूडन डरा, रहा किनारे बैठ।", a: "संत कबीर" },
+      { q: "ऐसी बानी बोलिए, मन का आपा खोय; औरन को शीतल करे, आपहुँ शीतल होय।", a: "संत कबीर" },
+      { q: "करत-करत अभ्यास के, जड़मति होत सुजान; रसरी आवत-जात ते, सिल पर परत निसान।", a: "कवि वृंद" },
+      { q: "रहिमन धागा प्रेम का, मत तोड़ो चटकाय; टूटे से फिर ना जुड़े, जुड़े गाँठ पड़ जाय।", a: "रहीम" },
+      { q: "तुलसी साथी विपति के, विद्या विनय विवेक।", a: "गोस्वामी तुलसीदास" },
+      { q: "कर्म करो, फल की चिंता मत करो।", a: "श्रीमद्भगवद्गीता" },
+      { q: "स्वयं अपना उद्धार करो, स्वयं को गिरने मत दो।", a: "श्रीमद्भगवद्गीता" },
+      { q: "उद्यम से ही कार्य सिद्ध होते हैं, केवल मनोरथ से नहीं।", a: "हितोपदेश" },
+      { q: "आलस्य मनुष्य के शरीर में रहने वाला सबसे बड़ा शत्रु है।", a: "संस्कृत सुभाषित" },
+      { q: "विद्या विनय देती है, विनय से पात्रता आती है, पात्रता से धन और धन से सुख।", a: "हितोपदेश" },
+      { q: "विद्या मित्र है यात्रा में, और घर में पत्नी मित्र है; रोगी का मित्र औषधि, मृत्यु के बाद धर्म।", a: "चाणक्य" },
+      { q: "शिक्षा सबसे बड़ा मित्र है; शिक्षित व्यक्ति हर जगह सम्मान पाता है।", a: "चाणक्य" },
+      { q: "हज़ार मील की यात्रा भी एक कदम से शुरू होती है।", a: "लाओ त्ज़ु" },
+      { q: "आप कितना धीरे चलते हैं इसकी चिंता मत कीजिए, बस रुकिए मत।", a: "कन्फ़्यूशियस" },
+      { q: "मन ही सब कुछ है; आप जो सोचते हैं, वही बन जाते हैं।", a: "गौतम बुद्ध" },
+      { q: "शिक्षा सबसे शक्तिशाली हथियार है, जिससे आप दुनिया को बदल सकते हैं।", a: "नेल्सन मंडेला" },
+      { q: "कोई भी काम जब तक पूरा नहीं होता, असंभव ही लगता है।", a: "नेल्सन मंडेला" },
+      { q: "मैं बहुत बुद्धिमान नहीं हूँ, बस समस्याओं के साथ ज़्यादा देर तक टिका रहता हूँ।", a: "अल्बर्ट आइंस्टीन" },
+      { q: "कल्पना ज्ञान से भी अधिक महत्वपूर्ण है।", a: "अल्बर्ट आइंस्टीन" },
+      { q: "मैं असफल नहीं हुआ, मैंने दस हज़ार ऐसे तरीके खोज लिए जो काम नहीं करते।", a: "थॉमस एडिसन" },
+      { q: "ज्ञान में किया गया निवेश सबसे अच्छा ब्याज देता है।", a: "बेंजामिन फ्रैंकलिन" },
+      { q: "शिक्षा की जड़ें कड़वी होती हैं, पर उसके फल मीठे होते हैं।", a: "अरस्तू" },
+      { q: "उच्चतम शिक्षा वह है जो हमें केवल जानकारी ही नहीं देती, बल्कि हमारे जीवन को सबके साथ सामंजस्य में लाती है।", a: "रवींद्रनाथ टैगोर" },
+      { q: "सफलता हमेशा असफलता के स्तंभ पर खड़ी होती है।", a: "नेताजी सुभाष चंद्र बोस" },
+      { q: "पुस्तकें वे साधन हैं जिनके द्वारा हम विभिन्न संस्कृतियों के बीच पुल बना सकते हैं।", a: "डॉ. सर्वपल्ली राधाकृष्णन" },
+      { q: "जाओ, जाकर पढ़ो-लिखो; शिक्षा ही सच्चा गहना है।", a: "सावित्रीबाई फुले" }
+    ];
+
+    // Looks random but never repeats within a full cycle: day number x a step that is coprime with the list size
+    function getSuvichar(date = new Date()) {
+      const n = SUVICHAR_LIST.length;
+      const gcd = (a, b) => b ? gcd(b, a % b) : a;
+      let step = 7;
+      while (gcd(step, n) !== 1) step++;
+      const dayNumber = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
+      return SUVICHAR_LIST[(dayNumber * step + 11) % n];
+    }
+
+    function shareSuvichar() {
+      const sv = getSuvichar();
+      const p = state.profile;
+      let text = `🌅 *आज का सुविचार*\n\n“${sv.q}”\n— ${sv.a}\n\n`;
+      text += `📚 *${p.libraryName || 'Self Study Library'}*\n`;
+      if (p.address) text += `📍 ${p.address}\n`;
+      if (p.phone) text += `📞 ${p.phone}\n`;
+      text += `\n${APP_PROMO}`;
+      shareText(text);
     }
 
     // ==========================================
     // TAB 3: SEAT MAP (Interactive Room Floor Canvas)
     // ==========================================
     const clampX = v => Math.max(6, Math.min(94, Math.round(v)));
-    const clampY = v => Math.max(8, Math.min(92, Math.round(v)));
+    // Y limits are in pixels (50px from top, 45px from bottom) so tall rooms use their whole height
+    const clampY = v => {
+      const H = getCanvasH(getActiveBranch());
+      return Math.round(Math.max(50 / H * 100, Math.min((H - 45) / H * 100, v)) * 10) / 10;
+    };
 
     function renderSeatsView() {
       const branch = getActiveBranch();
@@ -988,6 +1179,14 @@
                 Clear All
               </button>
             </div>
+            <div class="flex items-center gap-2">
+              <button onclick="autoArrangeDesks()" class="flex-1 py-1.5 bg-white border border-amber-400 text-amber-900 font-bold text-[11px] rounded-xl">
+                ✨ Auto Arrange (no overlap)
+              </button>
+              <button onclick="extendRoom()" class="px-3 py-1.5 bg-white border border-amber-400 text-amber-900 font-bold text-[11px] rounded-xl">
+                ⬇ More Space
+              </button>
+            </div>
           </div>
         ` : `
           <!-- Shift Filter Pills -->
@@ -1019,8 +1218,8 @@
           <div
             id="room-canvas"
             onclick="handleCanvasTap(event)"
-            class="relative w-full h-[470px] rounded-3xl border-2 ${isMapEditMode ? 'border-amber-400 bg-amber-50/20 touch-none' : 'bg-white border-slate-300'} shadow-sm overflow-hidden select-none"
-            style="background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px; touch-action: ${isMapEditMode ? 'none' : 'pan-y'};"
+            class="relative w-full rounded-3xl border-2 ${isMapEditMode ? 'border-amber-400 bg-amber-50/20' : 'bg-white border-slate-300'} shadow-sm overflow-hidden select-none"
+            style="height: ${getCanvasH(branch)}px; background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px; touch-action: pan-y;"
           >
             <!-- Room Top Marker (Whiteboard / Stage) -->
             <div class="absolute top-2 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-slate-200/90 text-slate-600 text-[10px] font-bold tracking-wider pointer-events-none border border-slate-300">
@@ -1063,7 +1262,7 @@
                 <div
                   id="dot-seat-${seat.seatNumber}"
                   class="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center w-11 h-11 rounded-2xl border-2 font-black shadow-md transition-transform active:scale-90 ${bgClass}"
-                  style="left: ${seat.x || 15}%; top: ${seat.y || 20}%; z-index: ${isMapEditMode ? 20 : 10};"
+                  style="left: ${seat.x || 15}%; top: ${seat.y || 20}%; z-index: ${isMapEditMode ? 20 : 10};${isMapEditMode ? ' touch-action: none;' : ''}"
                   onpointerdown="handleDotPointerDown(event, ${seat.seatNumber})"
                 >
                   <span class="text-[11px] leading-tight truncate max-w-[38px]">${esc(seat.label || seat.seatNumber)}</span>
@@ -1151,12 +1350,16 @@
       renderCurrentTab();
     }
 
-    // BATCH ADD ROW OF 5 DESKS
+    // BATCH ADD ROW OF 5 DESKS (new row goes below the lowest desk; the room grows when needed)
     function addBatchDesks(count = 5) {
       const branch = getActiveBranch();
       const list = getBranchSeats(branch.id);
       const start = Math.max(0, ...list.map(s => s.seatNumber)) + 1;
-      const y = Math.min(88, list.length ? Math.max(...list.map(s => s.y)) + 16 : 20);
+      const H0 = getCanvasH(branch);
+      const rowPx = list.length ? Math.max(...list.map(s => s.y * H0 / 100)) + ROW_PITCH : 70;
+      if (rowPx + 70 > H0) setCanvasH(branch, rowPx + 70);
+      const H = getCanvasH(branch);
+      const y = Math.round(rowPx / H * 1000) / 10;
 
       for (let i = 0; i < count; i++) {
         const n = start + i;
@@ -1170,19 +1373,41 @@
       renderCurrentTab();
     }
 
-    // CLEAR ALL DESKS FROM ROOM
+    // Re-arranges every desk in a tidy grid (6 per row) in seat-number order, room grows to fit
+    function autoArrangeDesks() {
+      const branch = getActiveBranch();
+      const list = getBranchSeats(branch.id).slice().sort((a, b) => a.seatNumber - b.seatNumber);
+      if (!list.length) { showToast('No desks to arrange.'); return; }
+      if (!confirm('All desks will be placed in neat rows in seat-number order. Continue?')) return;
+      const lay = gridLayout(list.length);
+      branch.canvasH = lay.H;
+      list.forEach((sd, i) => { sd.x = lay.pts[i].x; sd.y = lay.pts[i].y; });
+      saveData();
+      showToast('Desks arranged!');
+      renderCurrentTab();
+    }
+
+    // Adds more empty room space at the bottom
+    function extendRoom() {
+      const branch = getActiveBranch();
+      setCanvasH(branch, getCanvasH(branch) + 200);
+      saveData();
+      showToast('Room extended.');
+      renderCurrentTab();
+    }
+
+    // CLEAR ALL DESKS FROM ROOM (only the map; student records are never touched)
     function clearAllDesks() {
       const branch = getActiveBranch();
-      if (activeStudents(branch.id).length) {
-        alert('This branch still has students. Please vacate all students first, then you can clear all desks.');
-        return;
-      }
-      if (!confirm('Are you sure you want to clear all desks from this room?')) return;
+      const n = activeStudents(branch.id).length;
+      const extra = n ? `\n\n${n} active student(s) keep their records and seat numbers; they sit on the same seat again when you recreate that seat number.` : '';
+      if (!confirm('Remove all desks from this room map and start with a blank room?' + extra)) return;
       state.seats = state.seats.filter(s => s.branchId !== branch.id);
       branch.totalSeats = 0;
       branch.seatsInit = true;
+      branch.canvasH = CANVAS_MIN;
       saveData();
-      showToast('All desks cleared from map.');
+      showToast('Room map cleared. Tap the room to add desks.');
       renderCurrentTab();
     }
 
@@ -1906,6 +2131,21 @@
                 <input type="text" id="prof-upi" maxlength="60" value="${esc(state.profile.upiId || '')}" class="w-full px-3 py-2 border rounded-xl font-semibold" />
               </div>
             </div>
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">Library Facilities <span class="font-medium text-slate-400">(shown when you share)</span></label>
+              <div class="grid grid-cols-2 gap-1.5">
+                ${FACILITIES.map(f => `
+                  <label class="flex items-start gap-1.5 p-1.5 bg-slate-50 rounded-lg cursor-pointer">
+                    <input type="checkbox" name="prof-fac" value="${f.id}" ${(state.profile.facilities || []).includes(f.id) ? 'checked' : ''} class="w-3.5 h-3.5 mt-0.5 text-emerald-600 rounded">
+                    <span class="text-[11px] font-semibold text-slate-700 leading-tight">${esc(f.label)}</span>
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+            <div>
+              <label class="font-bold text-slate-700 block mb-0.5">Other facilities <span class="font-medium text-slate-400">(type your own, separate with comma)</span></label>
+              <textarea id="prof-fac-extra" rows="2" maxlength="300" placeholder="e.g. Personal Cabin, Study Lamp, Free Tea" class="w-full px-3 py-2 border rounded-xl font-semibold">${esc(state.profile.facilitiesExtra || '')}</textarea>
+            </div>
             <button type="submit" class="w-full py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-xs mt-1">
               Save Profile Details
             </button>
@@ -1981,6 +2221,8 @@
       state.profile.address = document.getElementById('prof-addr').value.trim();
       state.profile.phone = document.getElementById('prof-phone').value.trim();
       state.profile.upiId = document.getElementById('prof-upi').value.trim();
+      state.profile.facilities = Array.from(document.querySelectorAll('input[name="prof-fac"]:checked')).map(el => el.value);
+      state.profile.facilitiesExtra = document.getElementById('prof-fac-extra').value.trim().slice(0, 300);
       saveData();
       showToast('Profile updated successfully!');
       renderCurrentTab();
