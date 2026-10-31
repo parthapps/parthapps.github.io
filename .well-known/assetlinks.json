@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "io.github.parthapps.librarymap",
+    "sha256_cert_fingerprints": ["21:EF:B6:F2:F5:C7:4C:20:F1:91:42:E0:1C:FD:F1:10:B6:93:90:E4:F7:4D:DB:48:CE:85:4D:A0:98:EB:C7:78"]
+  }
+}]
